@@ -1,0 +1,28 @@
+[mysqld]
+datadir={{MYSQLD_DATADIR}}
+socket={{MYSQLD_SOCKET}}
+user=mysql
+binlog_format=ROW
+bind-address={{MYSQLD_BIND_ADDRESS}}
+default_storage_engine=innodb
+innodb_autoinc_lock_mode=2
+innodb_flush_log_at_trx_commit=0
+innodb_buffer_pool_size={{MYSQLD_INNODB_BUFFER_POOL_SIZE}}
+wsrep_on=ON
+wsrep_provider={{MYSQLD_WSREP_PROVIDER}}
+wsrep_provider_options="{{MYSQLD_MYSQLD_WSREP_PROVIDER_OPTIONS}}"
+wsrep_cluster_name="{{MYSQLD_WSREP_CLUSTER_NAME}}"
+wsrep_cluster_address="gcomm://{{MYSQLD_WSREP_CLUSTER_ADDRESS}}"
+wsrep_sst_method=rsync
+wsrep_node_name="{{MYSQLD_WSREP_NODE_NAME}}"
+wsrep_node_address="{{MYSQLD_WSREP_NODE_ADDRESS}}"
+
+[mysql_safe]
+log-error=/var/log/mysqld.log
+pid-file=/var/run/mysqld/mysqld.pid
+
+
+#
+# include all files from the config directory
+#
+!includedir /etc/my.cnf.d
