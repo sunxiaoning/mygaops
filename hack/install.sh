@@ -54,10 +54,10 @@ install-app() {
   dnf -y module disable mysql mariadb &> /dev/null;
 
   echo "Install ${GALERA_NAME}-${GALERA_VERSION} ..."
-  hack/yuminstaller.sh "${GALERA_NAME}" "${GALERA_VERSION}"
+  bashutils/yuminstaller.sh "${GALERA_NAME}" "${GALERA_VERSION}"
 
   echo "Install ${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION} ..."
-  hack/yuminstaller.sh "${MYSQL_WSREP_NAME}" "${MYSQL_WSREP_VERSION}"
+  bashutils/yuminstaller.sh "${MYSQL_WSREP_NAME}" "${MYSQL_WSREP_VERSION}"
 
   dnf -y module enable mysql mariadb &> /dev/null;
 }
