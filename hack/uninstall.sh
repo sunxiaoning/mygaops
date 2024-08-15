@@ -6,7 +6,7 @@ set -o pipefail
 USE_DOCKER=${USE_DOCKER:-"0"}
 
 
-export CLEAN_MYDATA_ONINSTALL=${CLEAN_MYDATA_ONINSTALL:-"0"}
+export CLEAN_MYDATA_ONUNINSTALL=${CLEAN_MYDATA_ONUNINSTALL:-"0"}
 export STOPMY_ONINSTALL=${STOPMY_ONINSTALL:-"0"}
 export MYSQLD_DATADIR=/var/lib/mysql
 
@@ -39,7 +39,7 @@ uninstall-app() {
     exit 1
   fi
   
-  if [[ "1" == "${CLEAN_MYDATA_ONINSTALL}" ]]; then
+  if [[ "1" == "${CLEAN_MYDATA_ONUNINSTALL}" ]]; then
     echo "[Warning] Clean old MySQL datadir ..."
     rm -rf ${MYSQLD_DATADIR}
   fi
