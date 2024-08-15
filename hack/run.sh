@@ -1,8 +1,14 @@
 #!/bin/bash
-#set -x
+
 set -o nounset
 set -o errexit
 set -o pipefail
+
+export DEBUG=${DEBUG:-"0"}
+
+if [[ "${DEBUG}" == "1" ]]; then
+  set -x
+fi
 
 BOOTSTRAP=${BOOTSTRAP:-"0"}
 
@@ -12,14 +18,33 @@ GALERA_VERSION=${GALERA_VERSION:-"26.4.19"}
 MYSQL_WSREP_NAME=${GALERA_NAME:-"mysql-wsrep-8.0"}
 MYSQL_WSREP_VERSION=${GALERA_VERSION:-"8.0.37"}
 
-MYSQLD_DATADIR=${MYSQLD_DATADIR:-/var/lib/mysql}
+MYSQLD_DATADIR=/var/lib/mysql
 
-NEW_PASSWORD=${NEW_PASSWORD:-"$(<.dmypasswd.txt)"}
+# TODO is safe, var scope ???
+NEW_PASSWORD=${NEW_PASSWORD:-""}
+NEW_PASSWORD_FILE=${NEW_PASSWORD_FILE:-".dmypasswd.txt"}
+
+if [[ -z "${NEW_PASSWORD}" ]]; then
+  echo "NEW_PASSWORD not set, try to load from password file ..."
+  if [[ ! -f "${NEW_PASSWORD_FILE}" ]]; then
+    echo "Error: NEW_PASSWORD_FILE: ${NEW_PASSWORD_FILE} not found!"
+    exit 1
+  fi
+  NEW_PASSWORD=$(cat "${NEW_PASSWORD_FILE}")
+fi
+
+if [[ -z "${NEW_PASSWORD}" ]]; then
+  echo "NEW_PASSWORD can't be empty!"
+  exit 1
+fi
+
 TEMP_PASSWORD=""
 
 TIMEOUT_DURATION="30s"
 
 MYSQL_USER=${MYSQL_USER:-"root"}
+
+# TODO is safe, var scope ???
 MYSQL_PASSWORD=${MYSQL_PASSWORD:-"${NEW_PASSWORD}"}
 MYSQL_HOST=${MYSQL_HOST:-"localhost"}
 MYSQL_PORT=${MYSQL_PORT:-"3306"}
@@ -58,8 +83,9 @@ start() {
 }
 
 init() {
+
   if [[ "0" == "${BOOTSTRAP}" ]]; then
-    echo "BOOTSTRAP false, reinit abort!"
+    echo "BOOTSTRAP false, init abort!"
     exit 1
   fi
 
@@ -67,7 +93,12 @@ init() {
     echo "mysqld is not running!"
     exit 1
   fi
+
   TEMP_PASSWORD=$(journalctl -u mysqld | grep 'temporary password' | tail -n 1 | awk '{print $NF}')
+  if [ -z "${TEMP_PASSWORD}" ]; then
+    echo "Error: can't find TEMP_PASSWORD, may be not init success or install log expired, you can run 'reinit' command to reinit mysqld."
+    exit 1
+  fi
   setpassword
 }
 

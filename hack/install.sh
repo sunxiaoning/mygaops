@@ -11,7 +11,7 @@ export WEB_PROTOCOL=${WEB_PROTOCOL:-http}
 export SERVER_NAME=${SERVER_NAME:-localhost}
 export USE_REPO_SERVER=${USE_REPO_SERVER:-0}
 
-export MYSQLD_DATADIR=${MYSQLD_DATADIR:-/var/lib/mysql}
+export MYSQLD_DATADIR=/var/lib/mysql
 export MYSQLD_SOCKET=${MYSQLD_SOCKET:-/var/lib/mysql/mysql.sock}
 export MYSQLD_BIND_ADDRESS=${MYSQLD_BIND_ADDRESS:-0.0.0.0}
 export MYSQLD_INNODB_BUFFER_POOL_SIZE=${MYSQLD_INNODB_BUFFER_POOL_SIZE:-122M}
@@ -42,12 +42,6 @@ install-repo() {
 }
 
 install-app() {
-
-  # TODO ??
-  if rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &> /dev/null && rpm -q "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION}" &> /dev/null; then
-    echo "Galera4 cluster already installed!"
-    return 0
-  fi
   if [[ "1" == "${STOPMY_ONINSTALL}" ]]; then
     hack/run.sh stop
   else
@@ -56,11 +50,6 @@ install-app() {
       echo "Service mysqld has not been shutdown completed!"
       exit 1
     fi
-  fi
-
-  if [[ "1" == "${CLEAN_MYDATA_ONINSTALL}" ]]; then
-    echo "Clean old MySQL datadir ..."
-    rm -rf ${MYSQLD_DATADIR}
   fi
 
   dnf -y module disable mysql mariadb &> /dev/null;

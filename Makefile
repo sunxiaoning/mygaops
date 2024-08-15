@@ -12,6 +12,10 @@ install-app: install-repo
 	@echo "Install app ..."
 	hack/install.sh app
 
+uninstall-app:
+	@echo "Uninstall app ..."
+	hack/uninstall.sh app
+
 install-conf:
 	@echo "Install conf ..."
 	hack/install.sh conf
