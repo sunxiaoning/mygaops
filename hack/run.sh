@@ -40,7 +40,7 @@ fi
 
 TEMP_PASSWORD=""
 
-TIMEOUT_DURATION="30s"
+MYSQLDOP_MYSQLDOP_TIMEOUT_DURATION=${MYSQLDOP_MYSQLDOP_TIMEOUT_DURATION:-"30s"}
 
 MYSQL_USER=${MYSQL_USER:-"root"}
 
@@ -71,8 +71,8 @@ start() {
     return 0
   fi
 
-  if ! timeout "${TIMEOUT_DURATION}" systemctl start mysqld; then
-    echo "Error: Service mysqld failed to start within ${TIMEOUT_DURATION} or encountered an error."
+  if ! timeout "${MYSQLDOP_TIMEOUT_DURATION}" systemctl start mysqld; then
+    echo "Error: Service mysqld failed to start within ${MYSQLDOP_TIMEOUT_DURATION} or encountered an error."
     exit 1
   fi
 
@@ -186,8 +186,8 @@ stop() {
     return 0
   fi
 
-  if ! timeout "${TIMEOUT_DURATION}" systemctl stop mysqld; then
-    echo "Error: Service mysqld failed to stop within ${TIMEOUT_DURATION} or encountered an error."
+  if ! timeout "${MYSQLDOP_TIMEOUT_DURATION}" systemctl stop mysqld; then
+    echo "Error: Service mysqld failed to stop within ${MYSQLDOP_TIMEOUT_DURATION} or encountered an error."
     exit 1
   fi
 
