@@ -34,7 +34,9 @@ MYSQL_WSREP_VERSION=${MYSQL_WSREP_VERSION:-"8.0.37"}
 
 install-repo() {
   cd "${RPMREPO_MODULE}"
-  make install-galera4
+
+  # TODO
+  make install-repogalera4
   yum clean all &> /dev/null;
   yum makecache
   cd "${PROJECT_PATH}"
@@ -71,7 +73,7 @@ install-conf() {
     echo "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION} has not been installed yet!"
     exit 1
   fi
-  hack/render.sh conf/my.cnf.tmpl "conf/my.cnf"
+  bashutils/render.sh conf/my.cnf.tmpl "conf/my.cnf"
   install -D -m 644 "conf/my.cnf" "/etc/my.cnf" 
 }
 
