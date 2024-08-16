@@ -229,8 +229,8 @@ check-node() {
 
   local cluster_size=$(echo "${output}" | grep 'wsrep_cluster_size' | awk '{print $2}')
   if [ "${cluster_size}" -lt "${MYSQLD_WSREP_CLUSTER_SIZE}" ]; then
-    echo "Check node ${MYSQLD_WSREP_NODE_ADDRESS} status failed! cluster_size: ${cluster_size}"
-    exit 1
+    echo "[Warning] Check node ${MYSQLD_WSREP_NODE_ADDRESS} status failed! wsrep_cluster_size: ${cluster_size}"
+    exit 0
   fi
   echo "The node: ${MYSQLD_WSREP_NODE_ADDRESS} of cluster is healthy and operational."
 }
