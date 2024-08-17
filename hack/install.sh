@@ -43,6 +43,11 @@ install-repo() {
 }
 
 install-app() {
+  if rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &> /dev/null && rpm -q "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION}" &> /dev/null; then
+    echo "Galera4 cluster already installed!"
+    return 0
+  fi
+
   if [[ "1" == "${STOPMY_ONINSTALL}" ]]; then
     hack/run.sh stop
   else
@@ -60,8 +65,6 @@ install-app() {
 
   echo "Install ${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION} ..."
   bashutils/yuminstaller.sh "${MYSQL_WSREP_NAME}" "${MYSQL_WSREP_VERSION}"
-
-  dnf -y module enable mysql mariadb &> /dev/null;
 }
 
 install-conf() {
@@ -69,11 +72,15 @@ install-conf() {
     echo "${GALERA_NAME}-${GALERA_VERSION} has not been installed yet!"
     exit 1
   fi
+  
   if ! rpm -q "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION}" &> /dev/null; then
     echo "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION} has not been installed yet!"
     exit 1
   fi
+
   bashutils/render.sh conf/my.cnf.tmpl "conf/my.cnf"
+  trap 'rm -rf "conf/my.cnf"' EXIT
+
   install -D -m 644 "conf/my.cnf" "/etc/my.cnf" 
 }
 
