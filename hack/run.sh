@@ -51,6 +51,7 @@ MYSQL_PORT=${MYSQL_PORT:-"3306"}
 
 start() {
   if systemctl is-active --quiet mysqld; then
+    echo "Service mysqld already started!"
     return 0
   fi
 
@@ -85,6 +86,7 @@ start() {
 
 init() {
   if [[ -f "${MYSQLD_DATADIR}/.initialized" ]]; then
+    echo "Service mysqld already initialized!"
     return 0
   fi
 
