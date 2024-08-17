@@ -58,6 +58,7 @@ start() {
     echo "${GALERA_NAME}-${GALERA_VERSION} has not been installed yet!"
     exit 1
   fi
+
   if ! rpm -q "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION}" &>/dev/null; then
     echo "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION} has not been installed yet!"
     exit 1
@@ -83,6 +84,9 @@ start() {
 }
 
 init() {
+  if [[ -f "${MYSQLD_DATADIR}/.initialized" ]]; then
+    return 0
+  fi
 
   if [[ "0" == "${BOOTSTRAP}" ]]; then
     echo "BOOTSTRAP false, init abort!"
@@ -100,6 +104,8 @@ init() {
     exit 1
   fi
   setpassword
+  
+  echo "Already initialized" >> "${MYSQLD_DATADIR}/.initialized" 
 }
 
 reinit() {
