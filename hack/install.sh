@@ -3,39 +3,32 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
-USE_DOCKER=${USE_DOCKER:-"0"}
+. hack/env.sh
 
 RPMREPO_MODULE=rpmrepo
 
-export WEB_PROTOCOL=${WEB_PROTOCOL:-http}
-export SERVER_NAME=${SERVER_NAME:-localhost}
-export USE_REPO_SERVER=${USE_REPO_SERVER:-0}
+export REPO_SOURCE=${REPO_SOURCE:-"0"}
+export REPO_SERVER_PROTOCOL=${REPO_SERVER_PROTOCOL:-"http"}
+export REPO_SERVER_NAME=${REPO_SERVER_NAME:-"localhost"}
 
-export MYSQLD_DATADIR=/var/lib/mysql
+export MYSQLD_DATADIR
 export MYSQLD_SOCKET=${MYSQLD_SOCKET:-/var/lib/mysql/mysql.sock}
+
 export MYSQLD_BIND_ADDRESS=${MYSQLD_BIND_ADDRESS:-0.0.0.0}
 export MYSQLD_INNODB_BUFFER_POOL_SIZE=${MYSQLD_INNODB_BUFFER_POOL_SIZE:-122M}
 export MYSQLD_WSREP_PROVIDER=${MYSQLD_WSREP_PROVIDER:-/usr/lib64/galera-4/libgalera_smm.so}
 export MYSQLD_MYSQLD_WSREP_PROVIDER_OPTIONS=${MYSQLD_MYSQLD_WSREP_PROVIDER_OPTIONS:-gcache.size=300M; gcache.page_size=300M}
 export MYSQLD_WSREP_CLUSTER_NAME=${MYSQLD_WSREP_CLUSTER_NAME:-galera-cluster}
-export MYSQLD_WSREP_CLUSTER_ADDRESS=${MYSQLD_WSREP_CLUSTER_ADDRESS:-}
+export MYSQLD_WSREP_CLUSTER_ADDRESS=${MYSQLD_WSREP_CLUSTER_ADDRESS:-""}
 export MYSQLD_WSREP_NODE_NAME=${MYSQLD_WSREP_NODE_NAME:-$(hostname)}
 export MYSQLD_WSREP_NODE_ADDRESS=${MYSQLD_WSREP_NODE_ADDRESS:-$(hostname -I | awk '{print $1}')}
 
-export STOPMY_ONINSTALL=${STOPMY_ONINSTALL:-"0"}
+STOP_SERV_ON_INSTALL=${STOP_SERV_ON_INSTALL:-"0"}
 
 PROJECT_PATH=$(pwd)
 
-GALERA_NAME=${GALERA_NAME:-"galera-4"}
-GALERA_VERSION=${GALERA_VERSION:-"26.4.19"}
-
-MYSQL_WSREP_NAME=${MYSQL_WSREP_NAME:-"mysql-wsrep-8.0"}
-MYSQL_WSREP_VERSION=${MYSQL_WSREP_VERSION:-"8.0.37"}
-
 install-repo() {
   cd "${RPMREPO_MODULE}"
-
-  # TODO
   make install-repogalera4
   yum clean all &> /dev/null;
   yum makecache
@@ -48,7 +41,7 @@ install-app() {
     return 0
   fi
 
-  if [[ "1" == "${STOPMY_ONINSTALL}" ]]; then
+  if [[ "1" == "${STOP_SERV_ON_INSTALL}" ]]; then
     hack/run.sh stop
   else
     local service_status=$(systemctl is-active mysqld 2>/dev/null || true)
@@ -68,11 +61,12 @@ install-app() {
 }
 
 install-conf() {
+  check-clusteraddress
   if ! rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &> /dev/null; then
     echo "${GALERA_NAME}-${GALERA_VERSION} has not been installed yet!"
     exit 1
   fi
-  
+
   if ! rpm -q "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION}" &> /dev/null; then
     echo "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION} has not been installed yet!"
     exit 1
@@ -82,6 +76,42 @@ install-conf() {
   trap 'rm -rf "conf/my.cnf"' EXIT
 
   install -D -m 644 "conf/my.cnf" "/etc/my.cnf" 
+}
+
+check-clusteraddress() {
+  if [ -z "${MYSQLD_WSREP_CLUSTER_ADDRESS}" ]; then
+      echo "MYSQLD_WSREP_CLUSTER_ADDRESS is empty!" >&2
+      exit 1
+  fi
+  
+  IFS=',' read -r -a WSREP_CLUSTER_ADDRESS_ARRAY <<<"${MYSQLD_WSREP_CLUSTER_ADDRESS}"
+
+  if [ "${#WSREP_CLUSTER_ADDRESS_ARRAY[@]}" -lt 2 ]; then
+      echo "MYSQLD_WSREP_CLUSTER_ADDRESS is invalid!" >&2
+      exit 1
+  fi
+
+  CHECK_HOST_IP_ERROR=$(bashutils/checkhostip.sh "${MYSQLD_WSREP_NODE_ADDRESS}" 2>&1 || true)
+  if [ ! -z "${CHECK_HOST_IP_ERROR}" ]; then
+      echo "MYSQLD_WSREP_NODE_ADDRESS: ${MYSQLD_WSREP_NODE_ADDRESS} not matched any host_ip!" >&2
+      exit 1
+  fi
+
+  MYSQLD_WSREP_NODE_ADDRESS_INDEX="-1"
+  for index in "${!WSREP_CLUSTER_ADDRESS_ARRAY[@]}"; do
+      if [ "${WSREP_CLUSTER_ADDRESS_ARRAY[$index]}" != "${MYSQLD_WSREP_NODE_ADDRESS}" ]; then
+          continue
+      fi
+
+      MYSQLD_WSREP_NODE_ADDRESS_INDEX="$index"
+      break
+
+  done
+
+  if [[ ${MYSQLD_WSREP_NODE_ADDRESS_INDEX} == "-1" ]]; then
+      echo "MYSQLD_WSREP_NODE_ADDRESS: ${MYSQLD_WSREP_NODE_ADDRESS} not matched any MYSQLD_WSREP_CLUSTER_ADDRESS: ${MYSQLD_WSREP_CLUSTER_ADDRESS} !" >&2
+      exit 1
+  fi
 }
 
 

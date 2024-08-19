@@ -4,54 +4,37 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
-export DEBUG=${DEBUG:-"0"}
+export USE_DEBUG=${USE_DEBUG:-"0"}
 
-if [[ "${DEBUG}" == "1" ]]; then
+if [[ "${USE_DEBUG}" == "1" ]]; then
   set -x
 fi
 
+. hack/env.sh
+
 BOOTSTRAP=${BOOTSTRAP:-"0"}
-
-GALERA_NAME=${GALERA_NAME:-"galera-4"}
-GALERA_VERSION=${GALERA_VERSION:-"26.4.19"}
-
-MYSQL_WSREP_NAME=${GALERA_NAME:-"mysql-wsrep-8.0"}
-MYSQL_WSREP_VERSION=${GALERA_VERSION:-"8.0.37"}
-
-MYSQLD_DATADIR=/var/lib/mysql
 
 # TODO is safe, var scope ???
 NEW_PASSWORD=${NEW_PASSWORD:-""}
 NEW_PASSWORD_FILE=${NEW_PASSWORD_FILE:-".dmypasswd.txt"}
 
-if [[ -z "${NEW_PASSWORD}" ]]; then
-  echo "NEW_PASSWORD not set, try to load from password file ..."
-  if [[ ! -f "${NEW_PASSWORD_FILE}" ]]; then
-    echo "Error: NEW_PASSWORD_FILE: ${NEW_PASSWORD_FILE} not found!"
-    exit 1
-  fi
-  NEW_PASSWORD=$(cat "${NEW_PASSWORD_FILE}")
-fi
-
-if [[ -z "${NEW_PASSWORD}" ]]; then
-  echo "NEW_PASSWORD can't be empty!"
-  exit 1
-fi
-
 TEMP_PASSWORD=""
 
-MYSQLDOP_TIMEOUT_DURATION=${MYSQLDOP_TIMEOUT_DURATION:-"30s"}
+MYSQLDOP_TIMEOUT_DURATION=${MYSQLDOP_TIMEOUT_DURATION:-"60s"}
 
 MYSQL_USER=${MYSQL_USER:-"root"}
 
 # TODO is safe, var scope ???
-MYSQL_PASSWORD=${MYSQL_PASSWORD:-"${NEW_PASSWORD}"}
+MYSQL_PASSWORD=${MYSQL_PASSWORD:-""}
 MYSQL_HOST=${MYSQL_HOST:-"localhost"}
 MYSQL_PORT=${MYSQL_PORT:-"3306"}
 
+MYSQLD_WSREP_CLUSTER_SIZE=${MYSQLD_WSREP_CLUSTER_SIZE:-"1"}
+
 start() {
+  check-bootstrap
   if systemctl is-active --quiet mysqld; then
-    echo "Service mysqld already started!"
+    echo "Service mysqld is already started!"
     return 0
   fi
 
@@ -85,13 +68,16 @@ start() {
 }
 
 init() {
+  check-bootstrap
+  check-newpassword
+
   if [[ -f "${MYSQLD_DATADIR}/.initialized" ]]; then
     echo "Service mysqld already initialized!"
     return 0
   fi
 
-  if [[ "0" == "${BOOTSTRAP}" ]]; then
-    echo "BOOTSTRAP false, init abort!"
+  if [[ "1" != "${BOOTSTRAP}" ]]; then
+    echo "BOOTSTRAP is not true, init abort!"
     exit 1
   fi
 
@@ -110,12 +96,27 @@ init() {
   echo "Already initialized" >> "${MYSQLD_DATADIR}/.initialized" 
 }
 
-reinit() {
+check-bootstrap() {
+  case "${BOOTSTRAP}" in
+  0)
+    ;;
+  1)
+    ;;
+  *)
+    echo "Unknown BOOTSTRAP: ${BOOTSTRAP}!"
+    exit 1
+    ;;
+  esac
+}
 
+reinit() {
+  check-bootstrap
   if [[ "0" == "${BOOTSTRAP}" ]]; then
     echo "BOOTSTRAP false, reinit abort!"
     exit 1
   fi
+
+  check-newpassword
 
   if ! rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &>/dev/null; then
     echo "${GALERA_NAME}-${GALERA_VERSION} has not been installed yet!"
@@ -152,14 +153,21 @@ reinit() {
   start
 
   TEMP_PASSWORD=$(grep 'temporary password' "${err_log}" | tail -n 1 | awk '{print $NF}')
+  if [ -z "${TEMP_PASSWORD}" ]; then
+    echo "Error: can't find TEMP_PASSWORD, may be not init success! you can run 'reinit' command again to reinit mysqld." >&2
+    exit 1
+  fi
   setpassword
 }
 
+
 setpassword() {
   if [ -z "${TEMP_PASSWORD}" ]; then
-    echo "Failed to get temporary password. Assuming password has been changed or login issue."
+    echo "temporary password can't be empty!" >&2
     exit 1
   fi
+
+  check-newpassword
 
   local login_output=$(mysql -u root -p"${TEMP_PASSWORD}" -e "SELECT 1;" 2>&1)
   if echo "${login_output}" | grep -q "ERROR"; then
@@ -174,6 +182,22 @@ setpassword() {
   fi
   unset NEW_PASSWORD
   unset TEMP_PASSWORD
+}
+
+check-newpassword() {
+   if [[ -z "${NEW_PASSWORD}" ]]; then
+    echo "NEW_PASSWORD not set, try to load from password file ..."
+    if [[ ! -f "${NEW_PASSWORD_FILE}" ]]; then
+      echo "Error: NEW_PASSWORD_FILE: ${NEW_PASSWORD_FILE} not found!"
+      exit 1
+    fi
+    NEW_PASSWORD=$(cat "${NEW_PASSWORD_FILE}")
+  fi
+
+  if [[ -z "${NEW_PASSWORD}" ]]; then
+    echo "NEW_PASSWORD can't be empty!"
+    exit 1
+  fi
 }
 
 setsegalera() {
@@ -208,37 +232,75 @@ stop() {
 }
 
 check-node() {
+  if [[ -z "${MYSQLD_WSREP_NODE_ADDRESS}" ]]; then
+    echo "MYSQLD_WSREP_NODE_ADDRESS param is invalid!" >&2
+    exit 1
+  fi
+
+  local check_host_ip_error=$(bashutils/checkhostip.sh "${MYSQLD_WSREP_NODE_ADDRESS}" 2>&1 || true)
+  if [ ! -z "${check_host_ip_error}" ]; then
+      echo "MYSQLD_WSREP_NODE_ADDRESS: ${MYSQLD_WSREP_NODE_ADDRESS} not matched any host_ip!" >&2
+      exit 1
+  fi
+
+  if [[ -z "${MYSQL_USER}" ]]; then
+    echo "MYSQL_USER param is invalid!" >&2
+    exit 1
+  fi
+
+  if [[ -z "${MYSQL_HOST}" ]]; then
+    echo "MYSQL_HOST param is invalid!" >&2
+    exit 1
+  fi
+
+  if [[ -z "${MYSQL_PORT}" ]]; then
+    echo "MYSQL_PORT param is invalid!" >&2
+    exit 1
+  fi
+
+  if [[ -z "${MYSQLD_WSREP_CLUSTER_SIZE}" ]]; then
+    echo "MYSQLD_WSREP_CLUSTER_SIZE param is invalid!" >&2
+    exit 1
+  fi
+
+  if [[ -z "${MYSQL_PASSWORD}" ]]; then
+    check-newpassword
+    MYSQL_PASSWORD=${NEW_PASSWORD}
+  fi
+
   # TODO login, SELECT test
+
   local output=$(mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" -h"${MYSQL_HOST}" -P"${MYSQL_PORT}" -e "SHOW STATUS LIKE 'wsrep_%';")
   local cluster_status=$(echo "${output}" | grep "wsrep_cluster_status" | awk '{print $2}')
   if [ "${cluster_status}" != "Primary" ]; then
-    echo "Check node status failed! wsrep_cluster_status: ${cluster_status}"m
+    echo "Check node: ${MYSQLD_WSREP_NODE_ADDRESS}  status failed! wsrep_cluster_status: ${cluster_status}" >&2
     exit 1
   fi
+
   local local_state=$(echo "${output}" | grep -E "wsrep_local_state\s+" | awk '{print $2}')
   local local_state_comment=$(echo "${output}" | grep "wsrep_local_state_comment" | awk '{print $2}')
-  echo "wsrep_local_state: ${local_state}, wsrep_local_state_comment: ${local_state_comment}"
 
   if [ "${local_state}" != "4" ] && [ "${local_state_comment}" != "Synced" ]; then
-    echo "Check node status failed! wsrep_local_state: ${local_state}, wsrep_local_state_comment: ${local_state_comment}"
+    echo "Check node: ${MYSQLD_WSREP_NODE_ADDRESS} status failed! wsrep_local_state: ${local_state}, wsrep_local_state_comment: ${local_state_comment}" >&2
     exit 1
   fi
 
   local connected=$(echo "${output}" | grep 'wsrep_connected' | awk '{print $2}')
   if [ "${connected}" != "ON" ]; then
-    echo "Check node status failed! wsrep_connected: ${connected}"
+    echo "Check node: ${MYSQLD_WSREP_NODE_ADDRESS} status failed! wsrep_connected: ${connected}" >&2
     exit 1
   fi
   local ready=$(echo "${output}" | grep "wsrep_ready" | awk '{print $2}')
   if [ "${ready}" != "ON" ]; then
-    echo "Check node status failed! wsrep_ready: ${ready}"
+    echo "Check node: ${MYSQLD_WSREP_NODE_ADDRESS} status failed! wsrep_ready: ${ready}" >&2
     exit 1
   fi
 
   local cluster_size=$(echo "${output}" | grep 'wsrep_cluster_size' | awk '{print $2}')
-  if [ "${cluster_size}" -lt "${MYSQLD_WSREP_CLUSTER_SIZE}" ]; then
-    echo "[Warning] Check node ${MYSQLD_WSREP_NODE_ADDRESS} status failed! wsrep_cluster_size: ${cluster_size}"
-    exit 0
+  echo "MYSQLD_WSREP_CLUSTER_SIZE: ${MYSQLD_WSREP_CLUSTER_SIZE}"
+  if [ "${cluster_size}" -ne "${MYSQLD_WSREP_CLUSTER_SIZE}" ]; then
+    echo "Check node: ${MYSQLD_WSREP_NODE_ADDRESS} status failed! wsrep_cluster_size: ${cluster_size}" >&2
+    exit 1
   fi
   echo "The node: ${MYSQLD_WSREP_NODE_ADDRESS} of cluster is healthy and operational."
 }
