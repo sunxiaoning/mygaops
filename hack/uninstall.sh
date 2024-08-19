@@ -3,21 +3,13 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
-USE_DOCKER=${USE_DOCKER:-"0"}
+. hack/env.sh
 
-
-export CLEAN_MYDATA_ONUNINSTALL=${CLEAN_MYDATA_ONUNINSTALL:-"0"}
-export STOPMY_ONINSTALL=${STOPMY_ONINSTALL:-"0"}
-export MYSQLD_DATADIR=/var/lib/mysql
-
-GALERA_NAME=${GALERA_NAME:-"galera-4"}
-GALERA_VERSION=${GALERA_VERSION:-"26.4.19"}
-
-MYSQL_WSREP_NAME=${MYSQL_WSREP_NAME:-"mysql-wsrep-8.0"}
-MYSQL_WSREP_VERSION=${MYSQL_WSREP_VERSION:-"8.0.37"}
+CLEAN_DATA_ON_UNINSTALL=${CLEAN_DATA_ON_UNINSTALL:-"0"}
+STOP_SERV_ON_UNINSTALL=${STOP_SERV_ON_UNINSTALL:-"0"}
 
 uninstall-app() {
-  if [[ "1" == "${STOPMY_ONINSTALL}" ]]; then
+  if [[ "1" == "${STOP_SERV_ON_UNINSTALL}" ]]; then
     hack/run.sh stop
   else
     local service_status=$(systemctl is-active mysqld 2>/dev/null || true)
@@ -39,7 +31,7 @@ uninstall-app() {
     exit 1
   fi
   
-  if [[ "1" == "${CLEAN_MYDATA_ONUNINSTALL}" ]]; then
+  if [[ "1" == "${CLEAN_DATA_ON_UNINSTALL}" ]]; then
     echo "[Warning] Clean old MySQL datadir ..."
     rm -rf ${MYSQLD_DATADIR}
   fi
