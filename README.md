@@ -6,46 +6,40 @@ Provide a focused set of tools for executing individual operations on MySQL Gale
 ### 1. Setting Up a MySQL Galera Cluster
 #### 1.1 Initial Node Setup
 ```bash
-# 1.1.1. Set bootstrap mode
+# 1. Set bootstrap mode
 export BOOTSTRAP=1
 
-# 1.1.2. Set the cluster node addresses
+# 2. Set the cluster node addresses
 export MYSQLD_WSREP_CLUSTER_ADDRESS=<node1_ip,node2_ip,node3_ip>  # Cluster node addresses
 export MYSQLD_WSREP_NODE_ADDRESS=<current_node_ip> # Current node IP address
 
-# 1.1.3. (Optional) Use a private repository (defaults to official repo if not set)
+# 3. (Optional) Use a private repository (defaults to official repo if not set)
 export REPO_SOURCE=1 # Enable private repository 
 export REPO_SERVER_PROTOCOL=<http/https>  # Set the repo protocol (default: http)
 export REPO_SERVER_NAME=<repo_server_name> # Set the repo server name (default: localhost)
 
-# 1.1.4. Set a new password for the Galera cluster
+# 4. Set a new password for the Galera cluster
 # Recommend: Method1
 export NEW_PASSWORD_FILE=<new_passoword_file_path> # Password file path (default: ./.dmypasswd.txt)
 # Alternative: Method 2
 export NEW_PASSWORD=<new_passoword> # Directly specify the new password
 
-# 1.1.5. Run the setup command
+# 5. Run the setup command
 make autoboot
 ```
 #### 1.2 Setup for Other Nodes
 ```bash
 
-# 1.2.1. Set the cluster node addresses
+# 1. Set the cluster node addresses
 export MYSQLD_WSREP_CLUSTER_ADDRESS=<node1_ip,node2_ip,node3_ip> # Cluster node addresses
 export MYSQLD_WSREP_NODE_ADDRESS=<current_node_ip> # Current node IP address
 
-# 1.2.2. (Optional) Use a private repository (defaults to official repo if not set)
+# 2. (Optional) Use a private repository (defaults to official repo if not set)
 export REPO_SOURCE=1 # Enable private repository
 export REPO_SERVER_PROTOCOL=<http/https> # Set the repo protocol (default: http)
 export REPO_SERVER_NAME=<repo_server_name> # Set the repo server name (default: localhost)
 
-# 1.2.3. Set a new password for the Galera cluster
-# Recommend: Method1
-export NEW_PASSWORD_FILE=<new_passoword_file_path> # Password file path (default: ./.dmypasswd.txt)
-# Alternative: Method 2
-export NEW_PASSWORD=<new_passoword> # Directly specify the new password
-
-# 1.2.4. Run the setup command
+# 3. Run the setup command
 make autorun
 ```
 
@@ -85,7 +79,7 @@ export REPO_SERVER_NAME=<repo_server_name> # Set the repo server name (default: 
 make install
 ```
 
-### 1.3 Method1: Install Using a Local Repository
+### 1.3 Method3: Install Using a Local Repository
 
 ```bash
 # 1. Set the cluster node addresses
