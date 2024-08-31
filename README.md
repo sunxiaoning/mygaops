@@ -98,10 +98,15 @@ make install
 ### 2.1 Starting the Initial Node
 >__Note:__ The initial node must be the one with the most recent commit, or the startup process will fail.
 ```bash
-BOOTSTRAP=1 make start
+# 1. Set bootstrap mode
+export BOOTSTRAP=1
+
+# 2. Run the start command
+make start
 ```
 ### 2.2 Starting Other Nodes
 ```bash
+# 1. Run the start command
 make start
 ```
 
@@ -113,12 +118,24 @@ make start
 
 ### 3.1 Recommend: Use `NEW_PASSWORD_FILE`
 ```bash
-BOOTSTRAP=1 NEW_PASSWORD_FILE=<new passoword file path> make init-server
+# 1. Set bootstrap mode
+export BOOTSTRAP=1
+
+# 2. Set the new password file path
+export NEW_PASSWORD_FILE=<new_passoword_file_path>
+
+# 3. Run the init-server command
+make init-server
 ```
 
 ### 3.2 Alternatively: Use `NEW_PASSWORD`
 ```bash
-BOOTSTRAP=1 NEW_PASSWORD=<new passoword> make init-server
+
+# 1. Set bootstrap mode
+export BOOTSTRAP=1
+
+# 2. Run the init-server command
+NEW_PASSWORD=<new passoword> make init-server
 ```
 
 ## 4. Reinitialize the Cluster
@@ -129,17 +146,30 @@ BOOTSTRAP=1 NEW_PASSWORD=<new passoword> make init-server
 
 ### 4.1 Recommended: Use `NEW_PASSWORD_FILE` 
 ```bash
-BOOTSTRAP=1 NEW_PASSWORD_FILE=<new_password_file_path> make reinit-server
+# 1. Set bootstrap mode
+export BOOTSTRAP=1
+
+# 2. Set the new password file path
+export NEW_PASSWORD_FILE=<new_password_file_path>
+
+# 3. Run the reinit-server command
+make reinit-server
 ```
 
 ### 4.2 Alternatively: Use `NEW_PASSWORD`
 ```bash
-BOOTSTRAP=1 NEW_PASSWORD=<new_passoword> make reinit-server
+# 1. Set bootstrap mode
+export BOOTSTRAP=1
+
+# 2. Run the reinit-server command
+NEW_PASSWORD=<new_passoword> make reinit-server
 ```
 
 
 ## 5. Stop the Cluster
 ```bash
+
+# 1. Run the stop command
 make stop
 ```
 
@@ -147,10 +177,17 @@ make stop
 ### 6.1 Restarting the Initial Node
 >Note: The initial node must be the one with the most recent commit; or the startup process will fail!
 ```bash
-BOOTSTRAP=1 make restart
+
+# 1. Set bootstrap mode
+export BOOTSTRAP=1
+
+# 2. Run the restart command
+make restart
 ```
 ### 6.2 Restarting Other Nodes
 ```bash
+
+# 1. Run the restart command
 make restart
 ```
 
@@ -159,6 +196,11 @@ make restart
 >1. Stop the MySQL service before uninstalling. Alternatively, set the environment variable `STOP_SERV_ON_UNINSTALL=1` to automatically stop the service during uninstallation.
 >2. By default, the uninstall-app operation does not remove MySQL data. To remove data, set `CLEAN_DATA_ON_UNINSTALL=1`.
 ```bash
+1. (Optional) Set the uninstall options
+export STOP_SERV_ON_UNINSTALL=1
+export CLEAN_DATA_ON_UNINSTALL=1
+
+2. Run the uninstall-app command
 make uninstall-app
 ```
 
