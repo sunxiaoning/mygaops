@@ -139,7 +139,7 @@ NEW_PASSWORD=<new passoword> make init-server
 ```
 
 ## 4. Reinitialize the Cluster
->__Notice:__
+>__Note:__
 >1. The `reinit` operation will completely remove all MySQL data, so proceed with caution.
 >2. The `reinit` command only needs to be executed on the initial node, as the operation will automatically sync with other nodes.
 >3. Escape special characters in your new password.
@@ -192,7 +192,7 @@ make restart
 ```
 
 ## 7. Uninstall the Cluster
->__Notice:__
+>__Note:__
 >1. Stop the MySQL service before uninstalling. Alternatively, set the environment variable `STOP_SERV_ON_UNINSTALL=1` to automatically stop the service during uninstallation.
 >2. By default, the uninstall-app operation does not remove MySQL data. To remove data, set `CLEAN_DATA_ON_UNINSTALL=1`.
 ```bash
