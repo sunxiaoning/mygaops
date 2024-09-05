@@ -4,6 +4,9 @@ Provide a focused set of tools for executing individual operations on MySQL Gale
 ## Quick Start
 
 ### 1. Setting Up a MySQL Galera Cluster
+>__Note:__
+>1. Galera-4 and MySQL-WSREP 8.0 are required; Galera-3 and MySQL-WSREP 5.7 are not recommended and have not been tested.
+>2. If you specify a custom version of Galera-4 and MySQL WSREP 8.0, you must ensure that the same version is installed on all cluster nodes.
 #### 1.1 Initial Node Setup
 ```bash
 # 1. Set bootstrap mode
@@ -13,18 +16,22 @@ export BOOTSTRAP=1
 export MYSQLD_WSREP_CLUSTER_ADDRESS=<node1_ip,node2_ip,node3_ip>  # Cluster node addresses
 export MYSQLD_WSREP_NODE_ADDRESS=<current_node_ip> # Current node IP address
 
-# 3. (Optional) Use a private repository (defaults to official repo if not set)
-export REPO_SOURCE=1 # Enable private repository 
-export REPO_SERVER_PROTOCOL=<http/https>  # Set the repo protocol (default: http)
-export REPO_SERVER_NAME=<repo_server_name> # Set the repo server name (default: localhost)
-
-# 4. Set a new password for the Galera cluster
+# 3. Set a new password for the Galera cluster
 # Recommend: Method1
 export NEW_PASSWORD_FILE=<new_passoword_file_path> # Password file path (default: ./.dmypasswd.txt)
 # Alternative: Method 2
 export NEW_PASSWORD=<new_passoword> # Directly specify the new password
 
-# 5. Run the setup command
+# 4. (Optional) Use a private repository (defaults to official repo if not set)
+export REPO_SOURCE=1 # Enable private repository 
+export REPO_SERVER_PROTOCOL=<http/https>  # Set the repo protocol (default: http)
+export REPO_SERVER_NAME=<repo_server_name> # Set the repo server name (default: localhost)
+
+# 5. (Optional) Specify the version of the software package to be installed.
+export GALERA_VERSION=<GALERA_VERSION> # Set the Galera Version (default: 26.4.19)
+export MYSQL_WSREP_VERSION=<MYSQL_WSREP_VERSION> # Set the MySQL WSREP Version (default: 8.0.37)
+
+# 6. Run the setup command
 make autoboot
 ```
 #### 1.2 Setup for Other Nodes
@@ -39,7 +46,11 @@ export REPO_SOURCE=1 # Enable private repository
 export REPO_SERVER_PROTOCOL=<http/https> # Set the repo protocol (default: http)
 export REPO_SERVER_NAME=<repo_server_name> # Set the repo server name (default: localhost)
 
-# 3. Run the setup command
+# 3. (Optional) Specify the version of the software package to be installed.
+export GALERA_VERSION=<GALERA_VERSION> # Set the Galera Version (default: 26.4.19)
+export MYSQL_WSREP_VERSION=<MYSQL_WSREP_VERSION> # Set the MySQL WSREP Version (default: 8.0.37)
+
+# 4. Run the setup command
 make autorun
 ```
 
