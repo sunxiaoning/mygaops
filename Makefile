@@ -38,6 +38,10 @@ check-node:
 	@echo "Check node mysql-wsrep status ..."
 	hack/run.sh check-node
 
+check-cluster:
+	@echo "Check cluster mysql-wsrep status ..."
+	hack/run.sh check-cluster
+	
 stop:
 	@echo "Stop server ..."
 	hack/run.sh stop

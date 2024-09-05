@@ -13,6 +13,7 @@ fi
 . hack/env.sh
 
 BOOTSTRAP=${BOOTSTRAP:-"0"}
+GRSTATE_FILE="${MYSQLD_DATADIR}/grastate.dat"
 
 # TODO is safe, var scope ???
 NEW_PASSWORD=${NEW_PASSWORD:-""}
@@ -29,40 +30,48 @@ MYSQL_PASSWORD=${MYSQL_PASSWORD:-""}
 MYSQL_HOST=${MYSQL_HOST:-"localhost"}
 MYSQL_PORT=${MYSQL_PORT:-"3306"}
 
-MYSQLD_WSREP_CLUSTER_SIZE=${MYSQLD_WSREP_CLUSTER_SIZE:-"1"}
+MYSQLD_WSREP_CLUSTER_SIZE=${MYSQLD_WSREP_CLUSTER_SIZE:-""}
 
 start() {
   check-bootstrap
   if systemctl is-active --quiet mysqld; then
-    echo "Service mysqld is already started!"
+    echo "Service mysqld is already started!" >&2
     return 0
   fi
 
   if ! rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &>/dev/null; then
-    echo "${GALERA_NAME}-${GALERA_VERSION} has not been installed yet!"
+    echo "${GALERA_NAME}-${GALERA_VERSION} has not been installed yet!" >&2
     exit 1
   fi
 
   if ! rpm -q "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION}" &>/dev/null; then
-    echo "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION} has not been installed yet!"
+    echo "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION} has not been installed yet!" >&2
     exit 1
   fi
 
   setsegalera
 
   if [[ "1" == "${BOOTSTRAP}" ]]; then
-    echo "Bootstrap mysqld ..."
-    mysqld_bootstrap
-    return 0
-  fi
-
-  if ! timeout "${MYSQLDOP_TIMEOUT_DURATION}" systemctl start mysqld; then
-    echo "Error: Service mysqld failed to start within ${MYSQLDOP_TIMEOUT_DURATION} or encountered an error."
-    exit 1
+    local safe_to_bootstrap=$(grep "^safe_to_bootstrap:" "${GRSTATE_FILE}" | awk '{print $2}')
+    if [ "${safe_to_bootstrap}" -ne 1 ]; then
+      echo "[Warning] Bootstrap status abnormal: safe_to_bootstrap=${safe_to_bootstrap}.Bootstrap operation is being skipped."
+      echo "[Warning] Please try to start MySQL directly.If you really need to bootstrap this node, modify safe_to_bootstrap=1 in ${GRSTATE_FILE}, but this is risky, please ensure this node is the most up-to-date and check all nodes before proceeding!"
+    else
+       echo "Bootstrap mysqld ..."
+       if ! timeout "${MYSQLDOP_TIMEOUT_DURATION}" mysqld_bootstrap; then
+         echo "Error: Service mysqld failed to bootstrap within ${MYSQLDOP_TIMEOUT_DURATION} or encountered an error." >&2
+         exit 1
+       fi
+    fi
+  else
+    if ! timeout "${MYSQLDOP_TIMEOUT_DURATION}" systemctl start mysqld; then
+      echo "Error: Service mysqld failed to start within ${MYSQLDOP_TIMEOUT_DURATION} or encountered an error." >&2
+      exit 1
+    fi
   fi
 
   if ! systemctl is-active --quiet mysqld; then
-    echo "mysqld is not running!"
+    echo "Error: Service mysqld is not running!" >&2
     exit 1
   fi
 }
@@ -70,6 +79,8 @@ start() {
 init() {
   check-bootstrap
   check-newpassword
+
+  # TODO check is the first node of cluster
 
   if [[ -f "${MYSQLD_DATADIR}/.initialized" ]]; then
     echo "Service mysqld already initialized!"
@@ -101,6 +112,7 @@ check-bootstrap() {
   0)
     ;;
   1)
+    check-safebootstrap
     ;;
   *)
     echo "Unknown BOOTSTRAP: ${BOOTSTRAP}!"
@@ -109,12 +121,35 @@ check-bootstrap() {
   esac
 }
 
+check-safebootstrap() {
+  if [ ! -d "${MYSQLD_DATADIR}" ]; then
+      echo "MySQL installation status abnormal: Directory ${MYSQLD_DATADIR} does not exist." >&2
+      exit 1
+  fi
+
+  if [ ! -f "${GRSTATE_FILE}" ]; then
+      echo "MySQL installation status abnormal: File ${GRSTATE_FILE} does not exist." >&2
+      exit 1
+  fi
+
+  local uuid=$(grep "^uuid:" "${GRSTATE_FILE}" | awk '{print $2}')
+  local seqno=$(grep "^seqno:" "${GRSTATE_FILE}" | awk '{print $2}')
+  local safe_to_bootstrap=$(grep "^safe_to_bootstrap:" "${GRSTATE_FILE}" | awk '{print $2}')
+
+  if [ -z "${uuid}" ] || [ -z "${seqno}" ] || [ -z "${safe_to_bootstrap}" ]; then
+      echo "MySQL state file abnormal: Missing required fields in ${GRSTATE_FILE}." >&2
+      exit 1
+  fi
+}
+
 reinit() {
   check-bootstrap
   if [[ "0" == "${BOOTSTRAP}" ]]; then
     echo "BOOTSTRAP false, reinit abort!"
     exit 1
   fi
+
+  # TODO find the most update node
 
   check-newpassword
 
@@ -232,6 +267,19 @@ stop() {
 }
 
 check-node() {
+  MYSQLD_WSREP_CLUSTER_SIZE=""
+  check-nodestatus
+}
+
+check-cluster() {
+  if [[ -z "${MYSQLD_WSREP_CLUSTER_SIZE}" ]]; then
+    echo "MYSQLD_WSREP_CLUSTER_SIZE param is invalid!" >&2
+    exit 1
+  fi
+  check-nodestatus
+}
+
+check-nodestatus() {
   if [[ -z "${MYSQLD_WSREP_NODE_ADDRESS}" ]]; then
     echo "MYSQLD_WSREP_NODE_ADDRESS param is invalid!" >&2
     exit 1
@@ -255,11 +303,6 @@ check-node() {
 
   if [[ -z "${MYSQL_PORT}" ]]; then
     echo "MYSQL_PORT param is invalid!" >&2
-    exit 1
-  fi
-
-  if [[ -z "${MYSQLD_WSREP_CLUSTER_SIZE}" ]]; then
-    echo "MYSQLD_WSREP_CLUSTER_SIZE param is invalid!" >&2
     exit 1
   fi
 
@@ -296,13 +339,18 @@ check-node() {
     exit 1
   fi
 
+  if [[ -z "${MYSQLD_WSREP_CLUSTER_SIZE}" ]]; then
+    echo "The node: ${MYSQLD_WSREP_NODE_ADDRESS} of cluster is healthy and operational."
+    return 0
+  fi
+
   local cluster_size=$(echo "${output}" | grep 'wsrep_cluster_size' | awk '{print $2}')
   echo "MYSQLD_WSREP_CLUSTER_SIZE: ${MYSQLD_WSREP_CLUSTER_SIZE}"
   if [ "${cluster_size}" -ne "${MYSQLD_WSREP_CLUSTER_SIZE}" ]; then
     echo "Check node: ${MYSQLD_WSREP_NODE_ADDRESS} status failed! wsrep_cluster_size: ${cluster_size}" >&2
     exit 1
   fi
-  echo "The node: ${MYSQLD_WSREP_NODE_ADDRESS} of cluster is healthy and operational."
+  echo "The cluster on node: ${MYSQLD_WSREP_NODE_ADDRESS} is healthy and operational."
 }
 
 main() {
@@ -315,6 +363,9 @@ main() {
     ;;
   check-node)
     check-node
+    ;;
+  check-cluster)
+    check-cluster
     ;;
   reinit)
     reinit
