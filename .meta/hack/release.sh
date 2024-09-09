@@ -30,7 +30,7 @@ install-rel() {
     return
   fi
 
-  #gh release create "${REL_TAG}" "${PKG_PATH}/${PKG_NAME}" --title "${REL_TITLE}" --notes "${REL_NOTES}"
+  gh release create "${REL_TAG}" "${PKG_PATH}/${PKG_NAME}" --title "${REL_TITLE}" --notes "${REL_NOTES}"
 }
 
 auth-gh() {

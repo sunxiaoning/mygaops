@@ -7,5 +7,5 @@ USE_DOCKER=${USE_DOCKER:-"0"}
 PKG_PATH=".meta/hack/pack"
 PKG_NAME="mygaops.tar.gz"
 
-PKG_VERSION=1.0.0
+PKG_VERSION="1.0.0"
 
