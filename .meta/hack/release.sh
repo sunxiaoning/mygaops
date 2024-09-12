@@ -20,10 +20,6 @@ cleanup() {
   echo "Cleanup done."
 }
 
-REL_TAG="v${PKG_VERSION}"
-REL_TITLE="Release v${PKG_VERSION}"
-REL_NOTES="Init release."
-
 install-rel() {
   if gh release view "${REL_TAG}" &>/dev/null; then
     echo "Release ${REL_TAG} already exists!"

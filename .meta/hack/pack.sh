@@ -11,6 +11,7 @@ EXCLUDES=(
   --exclude='*/.gh_token.txt'
   --exclude='*/.git'
   --exclude='*/.git*'
+  --exclude='*/.vscode'
   --exclude='*/.dmypasswd.txt'
 )
 
