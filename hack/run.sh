@@ -26,7 +26,9 @@ MYSQLDOP_TIMEOUT_DURATION=${MYSQLDOP_TIMEOUT_DURATION:-"60s"}
 MYSQL_USER=${MYSQL_USER:-"root"}
 
 # TODO is safe, var scope ???
-MYSQL_PASSWORD=${MYSQL_PASSWORD:-""}
+MYSQL_PASSWORD=${MYSQL_PASSWORD:-"${NEW_PASSWORD}"}
+MYSQL_PASSWORD_FILE=${MYSQL_PASSWORD_FILE:-"${NEW_PASSWORD_FILE}"}
+
 MYSQL_HOST=${MYSQL_HOST:-"localhost"}
 MYSQL_PORT=${MYSQL_PORT:-"3306"}
 
@@ -223,14 +225,14 @@ check-newpassword() {
    if [[ -z "${NEW_PASSWORD}" ]]; then
     echo "NEW_PASSWORD not set, try to load from password file ..."
     if [[ ! -f "${NEW_PASSWORD_FILE}" ]]; then
-      echo "Error: NEW_PASSWORD_FILE: ${NEW_PASSWORD_FILE} not found!"
+      echo "Error: NEW_PASSWORD_FILE: ${NEW_PASSWORD_FILE} not found!" >&2
       exit 1
     fi
     NEW_PASSWORD=$(cat "${NEW_PASSWORD_FILE}")
   fi
 
   if [[ -z "${NEW_PASSWORD}" ]]; then
-    echo "NEW_PASSWORD can't be empty!"
+    echo "NEW_PASSWORD can't be empty!"  >&2
     exit 1
   fi
 }
@@ -306,10 +308,8 @@ check-nodestatus() {
     exit 1
   fi
 
-  if [[ -z "${MYSQL_PASSWORD}" ]]; then
-    check-newpassword
-    MYSQL_PASSWORD=${NEW_PASSWORD}
-  fi
+  check-mysqlpassword
+  
 
   # TODO login, SELECT test
 
@@ -351,6 +351,22 @@ check-nodestatus() {
     exit 1
   fi
   echo "The cluster on node: ${MYSQLD_WSREP_NODE_ADDRESS} is healthy and operational."
+}
+
+check-mysqlpassword() {
+   if [[ -z "${MYSQL_PASSWORD}" ]]; then
+    echo "MYSQL_PASSWORD not set, try to load from password file ..."
+    if [[ ! -f "${MYSQL_PASSWORD_FILE}" ]]; then
+      echo "Error: MYSQL_PASSWORD_FILE: ${MYSQL_PASSWORD_FILE} not found!" >&2
+      exit 1
+    fi
+    MYSQL_PASSWORD=$(cat "${MYSQL_PASSWORD_FILE}")
+  fi
+
+  if [[ -z "${MYSQL_PASSWORD}" ]]; then
+    echo "MYSQL_PASSWORD can't be empty!"
+    exit 1
+  fi
 }
 
 main() {
