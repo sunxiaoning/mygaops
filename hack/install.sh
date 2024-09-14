@@ -27,6 +27,11 @@ STOP_SERV_ON_INSTALL=${STOP_SERV_ON_INSTALL:-"0"}
 
 PROJECT_PATH=$(pwd)
 
+SCRIPT_DIR=$(dirname "$(realpath "${BASH_SOURCE}")")
+YUMINSTALLER_SH_FILE="${SCRIPT_DIR}/../bashutils/yuminstaller.sh"
+RENDER_SH_FILE="${SCRIPT_DIR}/../bashutils/render.sh"
+CHECKHOSTIP_SH_FILE="${SCRIPT_DIR}/../bashutils/checkhostip.sh"
+
 install-repo() {
   cd "${RPMREPO_MODULE}"
   make install-repogalera4
@@ -54,10 +59,10 @@ install-app() {
   dnf -y module disable mysql mariadb &> /dev/null;
 
   echo "Install ${GALERA_NAME}-${GALERA_VERSION} ..."
-  bashutils/yuminstaller.sh "${GALERA_NAME}" "${GALERA_VERSION}"
+  "${YUMINSTALLER_SH_FILE}" -o "-y" "${GALERA_NAME}" "${GALERA_VERSION}"
 
   echo "Install ${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION} ..."
-  bashutils/yuminstaller.sh "${MYSQL_WSREP_NAME}" "${MYSQL_WSREP_VERSION}"
+  "${YUMINSTALLER_SH_FILE}" -o "-y" "${MYSQL_WSREP_NAME}" "${MYSQL_WSREP_VERSION}"
 }
 
 install-conf() {
@@ -72,7 +77,7 @@ install-conf() {
     exit 1
   fi
 
-  bashutils/render.sh conf/my.cnf.tmpl "conf/my.cnf"
+  "${RENDER_SH_FILE}" conf/my.cnf.tmpl "conf/my.cnf"
   trap 'rm -rf "conf/my.cnf"' EXIT
 
   install -D -m 644 "conf/my.cnf" "/etc/my.cnf" 
@@ -91,8 +96,8 @@ check-clusteraddress() {
       exit 1
   fi
 
-  CHECK_HOST_IP_ERROR=$(bashutils/checkhostip.sh "${MYSQLD_WSREP_NODE_ADDRESS}" 2>&1 || true)
-  if [ ! -z "${CHECK_HOST_IP_ERROR}" ]; then
+  local check_hostip_error=$("${CHECKHOSTIP_SH_FILE}" "${MYSQLD_WSREP_NODE_ADDRESS}" 2>&1 || true)
+  if [ ! -z "${check_hostip_error}" ]; then
       echo "MYSQLD_WSREP_NODE_ADDRESS: ${MYSQLD_WSREP_NODE_ADDRESS} not matched any host_ip!" >&2
       exit 1
   fi

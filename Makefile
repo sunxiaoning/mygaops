@@ -30,6 +30,9 @@ reinit-server:
 	@echo "Reinit server ..."
 	hack/run.sh reinit
 
+reset-password:
+	hack/run.sh reset-password
+
 autorun: install start
 
 autoboot: autorun init-server
