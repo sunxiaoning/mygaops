@@ -1,7 +1,6 @@
 #!/bin/bash
-set -o nounset
-set -o errexit
-set -o pipefail
+
+SCRIPT_DIR=$(dirname "$(realpath "${BASH_SOURCE}")")
 
 . hack/env.sh
 
@@ -20,17 +19,17 @@ uninstall-app() {
   fi
 
   yum -y remove "${GALERA_NAME}-${GALERA_VERSION}"
-  if rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &> /dev/null; then
+  if rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &>/dev/null; then
     echo "Remove Galera4 failed!" >&2
     exit 1
   fi
 
   yum -y remove "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION}"
-  if rpm -q "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION}" &> /dev/null; then
+  if rpm -q "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION}" &>/dev/null; then
     echo "Remove Mysql_Wserp failed!" >&2
     exit 1
   fi
-  
+
   if [[ "1" == "${CLEAN_DATA_ON_UNINSTALL}" ]]; then
     echo "[Warning] Clean old MySQL datadir ..."
     rm -rf ${MYSQLD_DATADIR}
