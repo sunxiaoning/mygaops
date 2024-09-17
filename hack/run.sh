@@ -1,14 +1,6 @@
 #!/bin/bash
 
-set -o nounset
-set -o errexit
-set -o pipefail
-
-export USE_DEBUG=${USE_DEBUG:-"0"}
-
-if [[ "${USE_DEBUG}" == "1" ]]; then
-  set -x
-fi
+SCRIPT_DIR=$(dirname "$(realpath "${BASH_SOURCE}")")
 
 . hack/env.sh
 
@@ -17,13 +9,14 @@ GRSTATE_FILE="${MYSQLD_DATADIR}/grastate.dat"
 
 # TODO is safe, var scope ???
 NEW_PASSWORD=${NEW_PASSWORD:-""}
-DEFAULT_NEW_PASSWORD_FILE=".dmypasswd.txt"
+HOME_DIR=$(__get-original-home-dir)
+DEFAULT_NEW_PASSWORD_DIR="${HOME_DIR}/.mygaops"
+DEFAULT_NEW_PASSWORD_FILE="${DEFAULT_NEW_PASSWORD_DIR}/.dmypasswd.txt"
 NEW_PASSWORD_FILE=${NEW_PASSWORD_FILE:-"${DEFAULT_NEW_PASSWORD_FILE}"}
 
 # TODO version controllf
 PWGEN_VERSION="2.08"
 
-SCRIPT_DIR=$(dirname "$(realpath "${BASH_SOURCE}")")
 YUMINSTALLER_SH_FILE="${SCRIPT_DIR}/../bashutils/yuminstaller.sh"
 
 MYSQL_ADMIN_USER="root"
@@ -97,11 +90,6 @@ start() {
 init() {
   check-bootstrap
 
-  parse-newpassword
-  if [[ -z "${NEW_PASSWORD}" ]]; then
-    gen-newpassword
-  fi
-
   # TODO check is the first node of cluster
 
   if [[ -f "${MYSQLD_DATADIR}/.initialized" ]]; then
@@ -126,6 +114,11 @@ init() {
   fi
 
   MYSQL_ADMIN_PASSWORD="${temp_password}"
+
+  parse-newpassword
+  if [[ -z "${NEW_PASSWORD}" ]]; then
+    gen-newpassword
+  fi
 
   setpassword
 
@@ -152,6 +145,8 @@ check-safebootstrap() {
   fi
 
   if [ ! -f "${GRSTATE_FILE}" ] || [ ! -s "${GRSTATE_FILE}" ]; then
+
+    # TODO check other nodes is running? if yes, abort current operation.
     return 0
   fi
 
@@ -173,11 +168,6 @@ reinit() {
   fi
 
   # TODO find the most update node
-
-  parse-newpassword
-  if [[ -z "${NEW_PASSWORD}" ]]; then
-    gen-newpassword
-  fi
 
   if ! rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &>/dev/null; then
     echo "${GALERA_NAME}-${GALERA_VERSION} has not been installed yet!"
@@ -226,6 +216,11 @@ reinit() {
   MYSQL_ADMIN_PASSWORD="${temp_password}"
 
   echo "Resetting MySQL password..."
+  parse-newpassword
+  if [[ -z "${NEW_PASSWORD}" ]]; then
+    gen-newpassword
+  fi
+
   setpassword
 
   echo "Already reinitialized." >>"${MYSQLD_DATADIR}/.initialized"
@@ -241,10 +236,7 @@ setpassword() {
     exit 1
   fi
 
-  if [ -z "${MYSQL_ADMIN_PASSWORD}" ]; then
-    echo "MYSQL_ADMIN_PASSWORD can't be empty!" >&2
-    exit 1
-  fi
+  check-mysql-admin-password
 
   check-newpassword
 
@@ -262,9 +254,30 @@ setpassword() {
   unset MYSQL_ADMIN_PASSWORD
 }
 
+check-mysql-admin-password() {
+  if [[ -z "${MYSQL_ADMIN_PASSWORD}" ]]; then
+    echo "MYSQL_ADMIN_PASSWORD not set, try to load from password file ..."
+    if [[ ! -f "${MYSQL_ADMIN_PASSWORD_FILE}" ]]; then
+      echo "Error: MYSQL_ADMIN_PASSWORD_FILE: ${MYSQL_ADMIN_PASSWORD_FILE} not found!" >&2
+      exit 1
+    fi
+    MYSQL_ADMIN_PASSWORD=$(cat "${MYSQL_ADMIN_PASSWORD_FILE}")
+  fi
+
+  if [[ -z "${MYSQL_ADMIN_PASSWORD}" ]]; then
+    echo "MYSQL_PASSWORD can't be empty!"
+    exit 1
+  fi
+}
+
 gen-newpassword() {
+  if [[ ! -f "${YUMINSTALLER_SH_FILE}" ]]; then
+    echo "Error: require ${YUMINSTALLER_SH_FILE}, but not found!" >&2
+    return 1
+  fi
   "${YUMINSTALLER_SH_FILE}" -o "--enablerepo=epel -y" pwgen "${PWGEN_VERSION}"
   local new_password="$(pwgen -cns 16 1 | sed 's/./!/9')"
+  mkdir -p "${DEFAULT_NEW_PASSWORD_DIR}"
   echo "${new_password}" >"${DEFAULT_NEW_PASSWORD_FILE}"
   NEW_PASSWORD="${new_password}"
   echo "Generate MySQL password to file: ${DEFAULT_NEW_PASSWORD_FILE}."

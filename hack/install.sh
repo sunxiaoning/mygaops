@@ -1,7 +1,5 @@
 #!/bin/bash
-set -o nounset
-set -o errexit
-set -o pipefail
+SCRIPT_DIR=$(dirname "$(realpath "${BASH_SOURCE}")")
 
 . hack/env.sh
 
@@ -27,7 +25,6 @@ STOP_SERV_ON_INSTALL=${STOP_SERV_ON_INSTALL:-"0"}
 
 PROJECT_PATH=$(pwd)
 
-SCRIPT_DIR=$(dirname "$(realpath "${BASH_SOURCE}")")
 YUMINSTALLER_SH_FILE="${SCRIPT_DIR}/../bashutils/yuminstaller.sh"
 RENDER_SH_FILE="${SCRIPT_DIR}/../bashutils/render.sh"
 CHECKHOSTIP_SH_FILE="${SCRIPT_DIR}/../bashutils/checkhostip.sh"
@@ -35,13 +32,13 @@ CHECKHOSTIP_SH_FILE="${SCRIPT_DIR}/../bashutils/checkhostip.sh"
 install-repo() {
   cd "${RPMREPO_MODULE}"
   make install-repogalera4
-  yum clean all &> /dev/null;
+  yum clean all &>/dev/null
   yum makecache
   cd "${PROJECT_PATH}"
 }
 
 install-app() {
-  if rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &> /dev/null && rpm -q "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION}" &> /dev/null; then
+  if rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &>/dev/null && rpm -q "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION}" &>/dev/null; then
     echo "Galera4 cluster already installed!"
     return 0
   fi
@@ -56,7 +53,7 @@ install-app() {
     fi
   fi
 
-  dnf -y module disable mysql mariadb &> /dev/null;
+  dnf -y module disable mysql mariadb &>/dev/null
 
   echo "Install ${GALERA_NAME}-${GALERA_VERSION} ..."
   "${YUMINSTALLER_SH_FILE}" -o "-y" "${GALERA_NAME}" "${GALERA_VERSION}"
@@ -67,12 +64,12 @@ install-app() {
 
 install-conf() {
   check-clusteraddress
-  if ! rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &> /dev/null; then
+  if ! rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &>/dev/null; then
     echo "${GALERA_NAME}-${GALERA_VERSION} has not been installed yet!"
     exit 1
   fi
 
-  if ! rpm -q "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION}" &> /dev/null; then
+  if ! rpm -q "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION}" &>/dev/null; then
     echo "${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION} has not been installed yet!"
     exit 1
   fi
@@ -80,45 +77,44 @@ install-conf() {
   "${RENDER_SH_FILE}" conf/my.cnf.tmpl "conf/my.cnf"
   trap 'rm -rf "conf/my.cnf"' EXIT
 
-  install -D -m 644 "conf/my.cnf" "/etc/my.cnf" 
+  install -D -m 644 "conf/my.cnf" "/etc/my.cnf"
 }
 
 check-clusteraddress() {
   if [ -z "${MYSQLD_WSREP_CLUSTER_ADDRESS}" ]; then
-      echo "MYSQLD_WSREP_CLUSTER_ADDRESS is empty!" >&2
-      exit 1
+    echo "MYSQLD_WSREP_CLUSTER_ADDRESS is empty!" >&2
+    exit 1
   fi
-  
+
   IFS=',' read -r -a WSREP_CLUSTER_ADDRESS_ARRAY <<<"${MYSQLD_WSREP_CLUSTER_ADDRESS}"
 
   if [ "${#WSREP_CLUSTER_ADDRESS_ARRAY[@]}" -lt 2 ]; then
-      echo "MYSQLD_WSREP_CLUSTER_ADDRESS is invalid!" >&2
-      exit 1
+    echo "MYSQLD_WSREP_CLUSTER_ADDRESS is invalid!" >&2
+    exit 1
   fi
 
   local check_hostip_error=$("${CHECKHOSTIP_SH_FILE}" "${MYSQLD_WSREP_NODE_ADDRESS}" 2>&1 || true)
   if [ ! -z "${check_hostip_error}" ]; then
-      echo "MYSQLD_WSREP_NODE_ADDRESS: ${MYSQLD_WSREP_NODE_ADDRESS} not matched any host_ip!" >&2
-      exit 1
+    echo "MYSQLD_WSREP_NODE_ADDRESS: ${MYSQLD_WSREP_NODE_ADDRESS} not matched any host_ip!" >&2
+    exit 1
   fi
 
   MYSQLD_WSREP_NODE_ADDRESS_INDEX="-1"
   for index in "${!WSREP_CLUSTER_ADDRESS_ARRAY[@]}"; do
-      if [ "${WSREP_CLUSTER_ADDRESS_ARRAY[$index]}" != "${MYSQLD_WSREP_NODE_ADDRESS}" ]; then
-          continue
-      fi
+    if [ "${WSREP_CLUSTER_ADDRESS_ARRAY[$index]}" != "${MYSQLD_WSREP_NODE_ADDRESS}" ]; then
+      continue
+    fi
 
-      MYSQLD_WSREP_NODE_ADDRESS_INDEX="$index"
-      break
+    MYSQLD_WSREP_NODE_ADDRESS_INDEX="$index"
+    break
 
   done
 
   if [[ ${MYSQLD_WSREP_NODE_ADDRESS_INDEX} == "-1" ]]; then
-      echo "MYSQLD_WSREP_NODE_ADDRESS: ${MYSQLD_WSREP_NODE_ADDRESS} not matched any MYSQLD_WSREP_CLUSTER_ADDRESS: ${MYSQLD_WSREP_CLUSTER_ADDRESS} !" >&2
-      exit 1
+    echo "MYSQLD_WSREP_NODE_ADDRESS: ${MYSQLD_WSREP_NODE_ADDRESS} not matched any MYSQLD_WSREP_CLUSTER_ADDRESS: ${MYSQLD_WSREP_CLUSTER_ADDRESS} !" >&2
+    exit 1
   fi
 }
-
 
 main() {
   if [[ "1" == "${USE_DOCKER}" ]]; then

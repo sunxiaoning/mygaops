@@ -1,6 +1,4 @@
-set -o nounset
-set -o errexit
-set -o pipefail
+. ${SCRIPT_DIR}/../bashutils/basicenv.sh
 
 USE_DOCKER=${USE_DOCKER:-"0"}
 
