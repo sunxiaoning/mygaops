@@ -6,9 +6,9 @@ USE_DOCKER=${USE_DOCKER:-"0"}
 
 PKG_PATH=".meta/hack/pack"
 
-PKG_VERSION="1.1.1"
+PKG_VERSION="1.1.2"
 PKG_NAME="mygaops-${PKG_VERSION}.tar.gz"
 
 REL_TAG="v${PKG_VERSION}"
 REL_TITLE="Release v${PKG_VERSION}"
-REL_NOTES="Optimize auto gen password."
+REL_NOTES="Update bashutils."
