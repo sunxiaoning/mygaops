@@ -117,12 +117,12 @@ init() {
     exit 1
   fi
 
+  MYSQL_ADMIN_PASSWORD="${temp_password}"
+
   if ! check-init-status; then
     echo "Connection with temp_password failed, MySQL has likely been initialized. Skipping initialization."
     return 0
   fi
-
-  MYSQL_ADMIN_PASSWORD="${temp_password}"
 
   parse-newpassword
   if [[ -z "${NEW_PASSWORD}" ]]; then
@@ -133,7 +133,7 @@ init() {
 }
 
 check-init-status() {
-  local output=$(mysql -u "${MYSQL_ADMIN_USER}" -p"${temp_password}" --connect-expired-password -e "SELECT 1;" 2>&1)
+  local output=$(mysql -u "${MYSQL_ADMIN_USER}" -p"${MYSQL_ADMIN_PASSWORD}" --connect-expired-password -e "SELECT 1;" 2>&1)
   if [[ "$output" == *"ERROR 1045"* ]]; then
     return 1
   fi
