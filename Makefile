@@ -8,7 +8,8 @@ install-repo:
 	@echo "Install repo ..."
 	hack/install.sh repo
 
-install-app: install-repo
+install-app:
+	$(MAKE) install-repo
 	@echo "Install app ..."
 	hack/install.sh app
 
@@ -16,7 +17,9 @@ install-conf:
 	@echo "Install conf ..."
 	hack/install.sh conf
 
-install: install-app install-conf
+install: 
+	$(MAKE) install-app
+	$(MAKE) install-conf
 
 start:
 	@echo "Start server ..."
@@ -33,9 +36,13 @@ reinit-server:
 reset-password:
 	hack/run.sh reset-password
 
-autorun: install start
+autorun: 
+	$(MAKE) install 
+	$(MAKE) start
 
-autoboot: autorun init-server
+autoboot: 
+	$(MAKE) autorun 
+	$(MAKE) init-server
 
 check-node:
 	@echo "Check node mysql-wsrep status ..."
@@ -49,7 +56,9 @@ stop:
 	@echo "Stop server ..."
 	hack/run.sh stop
 
-restart: stop start
+restart: 
+	(MAKE) stop 
+	(MAKE) start
 
 uninstall-app:
 	@echo "Uninstall app ..."
