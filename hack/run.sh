@@ -1,11 +1,20 @@
 #!/bin/bash
 
 SCRIPT_DIR=$(dirname "$(realpath "${BASH_SOURCE}")")
+SCRIPT_NAME=$(basename "$0")
 
-. hack/env.sh
+TERMINATE_DONE=0
+CLEAN_DONE=0
+
+trap __terminate INT TERM
+trap __cleanup EXIT
+
+. ${SCRIPT_DIR}/env.sh
+
+. ${SCRIPT_DIR}/basegrastate.sh
 
 BOOTSTRAP=${BOOTSTRAP:-"0"}
-GRSTATE_FILE="${MYSQLD_DATADIR}/grastate.dat"
+EXECRSH_SH_FILE="${SCRIPT_DIR}/../bashutils/execrsh.sh"
 
 # TODO is safe, var scope ???
 NEW_PASSWORD=${NEW_PASSWORD:-""}
@@ -39,12 +48,15 @@ CHECKHOSTIP_SH_FILE="${SCRIPT_DIR}/../bashutils/checkhostip.sh"
 
 MYSQLD_WSREP_CLUSTER_SIZE=${MYSQLD_WSREP_CLUSTER_SIZE:-""}
 
+MYSQLD_WSREP_CLUSTER_ADDRESS=${MYSQLD_WSREP_CLUSTER_ADDRESS:-""}
+WSREP_CLUSTER_ADDRESS_ARRAY=()
+
+TEMP_FILES=()
+
 start() {
+  check-clusteraddress
+
   check-bootstrap
-  if systemctl is-active --quiet mysqld; then
-    echo "Service mysqld is already started!" >&2
-    return 0
-  fi
 
   if ! rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &>/dev/null; then
     echo "${GALERA_NAME}-${GALERA_VERSION} has not been installed yet!" >&2
@@ -56,23 +68,22 @@ start() {
     exit 1
   fi
 
+  if systemctl is-active --quiet mysqld; then
+    echo "Service mysqld is already started!" >&2
+    return 0
+  fi
+
   setsegalera
 
-  if [[ "1" == "${BOOTSTRAP}" ]]; then
-    local safe_to_bootstrap="1"
-    if [ -f "${GRSTATE_FILE}" ] || [ -s "${GRSTATE_FILE}" ]; then
-      safe_to_bootstrap=$(grep "^safe_to_bootstrap:" "${GRSTATE_FILE}" | awk '{print $2}')
-    fi
+  reset-failed
 
-    if [ "${safe_to_bootstrap}" -ne 1 ]; then
-      echo "[Warning] Bootstrap status abnormal: safe_to_bootstrap=${safe_to_bootstrap}.Bootstrap operation is being skipped."
-      echo "[Warning] Please try to start MySQL directly.If you really need to bootstrap this node, modify safe_to_bootstrap=1 in ${GRSTATE_FILE}, but this is risky, please ensure this node is the most up-to-date and check all nodes before proceeding!"
-    else
-      echo "Bootstrap mysqld ..."
-      if ! timeout "${MYSQLDOP_TIMEOUT_DURATION}" mysqld_bootstrap; then
-        echo "Error: Service mysqld failed to bootstrap within ${MYSQLDOP_TIMEOUT_DURATION} or encountered an error." >&2
-        exit 1
-      fi
+  if [[ "1" == "${BOOTSTRAP}" ]]; then
+    check-safe-bootstrap
+
+    echo "Bootstrap mysqld ..."
+    if ! timeout "${MYSQLDOP_TIMEOUT_DURATION}" mysqld_bootstrap; then
+      echo "Error: Service mysqld failed to bootstrap within ${MYSQLDOP_TIMEOUT_DURATION} or encountered an error." >&2
+      exit 1
     fi
   else
     if ! timeout "${MYSQLDOP_TIMEOUT_DURATION}" systemctl start mysqld; then
@@ -90,13 +101,6 @@ start() {
 init() {
   check-bootstrap
 
-  # TODO check is the first node of cluster
-
-  if [[ -f "${MYSQLD_DATADIR}/.initialized" ]]; then
-    echo "Service mysqld already initialized!"
-    return 0
-  fi
-
   if [[ "1" != "${BOOTSTRAP}" ]]; then
     echo "BOOTSTRAP is not true, init abort!"
     exit 1
@@ -113,6 +117,11 @@ init() {
     exit 1
   fi
 
+  if ! check-init-status; then
+    echo "Connection with temp_password failed, MySQL has likely been initialized. Skipping initialization."
+    return 0
+  fi
+
   MYSQL_ADMIN_PASSWORD="${temp_password}"
 
   parse-newpassword
@@ -121,16 +130,25 @@ init() {
   fi
 
   setpassword
+}
 
-  echo "Already initialized." >>"${MYSQLD_DATADIR}/.initialized"
+check-init-status() {
+  local output=$(mysql -u "${MYSQL_ADMIN_USER}" -p"${temp_password}" --connect-expired-password -e "SELECT 1;" 2>&1)
+  if [[ "$output" == *"ERROR 1045"* ]]; then
+    return 1
+  fi
+
+  if [[ "$output" == *"Access denied"* ]]; then
+    return 1
+  fi
+
+  return 0
 }
 
 check-bootstrap() {
   case "${BOOTSTRAP}" in
   0) ;;
-  1)
-    check-safebootstrap
-    ;;
+  1) ;;
   *)
     echo "Unknown BOOTSTRAP: ${BOOTSTRAP}!"
     exit 1
@@ -138,24 +156,141 @@ check-bootstrap() {
   esac
 }
 
-check-safebootstrap() {
+check-safe-bootstrap() {
   if [ ! -d "${MYSQLD_DATADIR}" ]; then
     echo "MySQL installation status abnormal: Directory ${MYSQLD_DATADIR} does not exist." >&2
     exit 1
   fi
 
-  if [ ! -f "${GRSTATE_FILE}" ] || [ ! -s "${GRSTATE_FILE}" ]; then
+  if [[ ! -f "${EXECRSH_SH_FILE}" ]]; then
+    echo "Error: require ${EXECRSH_SH_FILE}, but not found!" >&2
+    exit 1
+  fi
 
-    # TODO check other nodes is running? if yes, abort current operation.
+  local safe_to_bootstrap
+  safe_to_bootstrap=$(check-galera-safebootstrap)
+
+  if [ -z "${safe_to_bootstrap}" ]; then
+
+    for index in "${!WSREP_CLUSTER_ADDRESS_ARRAY[@]}"; do
+      local node_address=${WSREP_CLUSTER_ADDRESS_ARRAY[$index]}
+      if [[ "${node_address}" == "${MYSQLD_WSREP_NODE_ADDRESS}" ]]; then
+        continue
+      fi
+
+      echo "Start checking node: ${node_address} grastate..."
+
+      local tmp_file_node_seqno
+      tmp_file_node_seqno=$(mktemp -t node_seqno-XXXXXX)
+
+      TEMP_FILES+=("${tmp_file_node_seqno}")
+
+      "${EXECRSH_SH_FILE}" -e "-o BatchMode=yes" -p "${SCRIPT_DIR}/../bashutils/ ${SCRIPT_DIR}/../hack/" -a "check-seqno" -r "${tmp_file_node_seqno}" "${node_address}" "hack/grastate.sh"
+
+      local node_seqno
+      node_seqno=$(cat "${tmp_file_node_seqno}")
+
+      if [[ -z "${node_seqno-}" ]]; then
+        continue
+      fi
+
+      if [[ "${node_seqno}" == *"Error:"* ]]; then
+        echo "check node_seqno failed, ${node_seqno}."
+        exit 1
+      fi
+
+      if [[ -n "${node_seqno}" ]]; then
+        echo "Error: Galera cluster state is inconsistent, abort operation. node_seqno: ${node_seqno}" >&2
+        exit 1
+      fi
+
+    done
+
     return 0
   fi
 
-  local uuid=$(grep "^uuid:" "${GRSTATE_FILE}" | awk '{print $2}')
-  local seqno=$(grep "^seqno:" "${GRSTATE_FILE}" | awk '{print $2}')
-  local safe_to_bootstrap=$(grep "^safe_to_bootstrap:" "${GRSTATE_FILE}" | awk '{print $2}')
+  if [ "${safe_to_bootstrap}" -ne 1 ]; then
+    echo "[Warning] Bootstrap status abnormal: safe_to_bootstrap=${safe_to_bootstrap}.Bootstrap operation is being skipped."
+    echo "[Warning] Please try to start MySQL directly.If you really need to bootstrap this node, modify safe_to_bootstrap=1 in ${GRSTATE_FILE}, but this is risky, please ensure this node is the most up-to-date and check all nodes before proceeding!"
+    exit 1
+  fi
 
-  if [ -z "${uuid}" ] || [ -z "${seqno}" ] || [ -z "${safe_to_bootstrap}" ]; then
+  local seqno
+  seqno=$(check-galera-seqno)
+
+  if [ -z "${seqno}" ]; then
     echo "MySQL state file abnormal: Missing required fields in ${GRSTATE_FILE}." >&2
+    exit 1
+  fi
+
+  for index in "${!WSREP_CLUSTER_ADDRESS_ARRAY[@]}"; do
+    local node_address=${WSREP_CLUSTER_ADDRESS_ARRAY[$index]}
+    if [[ "${node_address}" == "${MYSQLD_WSREP_NODE_ADDRESS}" ]]; then
+      continue
+    fi
+
+    echo "Start checking node: ${node_address} grastate..."
+
+    local tmp_file_node_seqno
+    tmp_file_node_seqno=$(mktemp -t node_seqno-XXXXXX)
+
+    TEMP_FILES+=("${tmp_file_node_seqno}")
+
+    "${EXECRSH_SH_FILE}" -e "-o BatchMode=yes" -p "${SCRIPT_DIR}/../bashutils/ ${SCRIPT_DIR}/../hack/" -a "check-seqno" -r "${tmp_file_node_seqno}" "${node_address}" "hack/grastate.sh"
+
+    local node_seqno
+    node_seqno=$(cat "${tmp_file_node_seqno}")
+
+    if [[ -z "${node_seqno-}" ]]; then
+      continue
+    fi
+
+    if [[ "${node_seqno}" == *"Error:"* ]]; then
+      echo "check node_seqno failed, ${node_seqno}."
+      exit 1
+    fi
+
+    echo "Comparing seqno with node: ${node_address} ..."
+
+    if [[ "${node_seqno}" -gt "${seqno}" ]]; then
+      echo "Error: ${MYSQLD_WSREP_NODE_ADDRESS} is not the most recent commit, abort operation." >&2
+      exit 1
+    fi
+  done
+}
+
+check-clusteraddress() {
+  if [ -z "${MYSQLD_WSREP_CLUSTER_ADDRESS}" ]; then
+    echo "MYSQLD_WSREP_CLUSTER_ADDRESS is empty!" >&2
+    exit 1
+  fi
+
+  IFS=',' read -r -a WSREP_CLUSTER_ADDRESS_ARRAY <<<"${MYSQLD_WSREP_CLUSTER_ADDRESS}"
+
+  if [ "${#WSREP_CLUSTER_ADDRESS_ARRAY[@]}" -lt 2 ]; then
+    echo "MYSQLD_WSREP_CLUSTER_ADDRESS is invalid!" >&2
+    exit 1
+  fi
+
+  local check_hostip_error=$("${CHECKHOSTIP_SH_FILE}" "${MYSQLD_WSREP_NODE_ADDRESS}" 2>&1 || true)
+  if [ ! -z "${check_hostip_error}" ]; then
+    echo "MYSQLD_WSREP_NODE_ADDRESS: ${MYSQLD_WSREP_NODE_ADDRESS} not matched any host_ip!" >&2
+    exit 1
+  fi
+
+  MYSQLD_WSREP_NODE_ADDRESS_INDEX="-1"
+  for index in "${!WSREP_CLUSTER_ADDRESS_ARRAY[@]}"; do
+    if [ "${WSREP_CLUSTER_ADDRESS_ARRAY[$index]}" != "${MYSQLD_WSREP_NODE_ADDRESS}" ]; then
+      continue
+    fi
+
+    MYSQLD_WSREP_NODE_ADDRESS_INDEX="$index"
+    break
+
+  done
+
+  if [[ ${MYSQLD_WSREP_NODE_ADDRESS_INDEX} == "-1" ]]; then
+    echo "MYSQLD_WSREP_NODE_ADDRESS: ${MYSQLD_WSREP_NODE_ADDRESS} not matched any MYSQLD_WSREP_CLUSTER_ADDRESS: ${MYSQLD_WSREP_CLUSTER_ADDRESS} !" >&2
     exit 1
   fi
 }
@@ -312,6 +447,10 @@ setsemysqld_t() {
   semanage permissive -a mysqld_t
 }
 
+reset-failed() {
+  systemctl reset-failed mysqld
+}
+
 stop() {
   local service_status=$(systemctl is-active mysqld 2>/dev/null || true)
   if [[ "${service_status}" == "inactive" ]] || [[ "${service_status}" == "dead" ]]; then
@@ -458,6 +597,20 @@ main() {
     echo "Action not support! start/stop/restart only!"
     ;;
   esac
+}
+
+terminate() {
+  echo "terminating..."
+}
+
+cleanup() {
+  if [[ "${#TEMP_FILES[@]}" -gt 0 ]]; then
+    echo "Cleaning temp_files...."
+
+    for temp_file in "${TEMP_FILES[@]}"; do
+      rm -f "${temp_file}" || true
+    done
+  fi
 }
 
 main "$@"
