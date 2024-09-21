@@ -93,6 +93,8 @@ check-clusteraddress() {
     exit 1
   fi
 
+  WSREP_CLUSTER_ADDRESS_ARRAY=($(printf "%s\n" "${WSREP_CLUSTER_ADDRESS_ARRAY[@]}" | LC_ALL=C sort -s -t '.' -k1,1n -k2,2n -k3,3n -k4,4n))
+
   local check_hostip_error=$("${CHECKHOSTIP_SH_FILE}" "${MYSQLD_WSREP_NODE_ADDRESS}" 2>&1 || true)
   if [ ! -z "${check_hostip_error}" ]; then
     echo "MYSQLD_WSREP_NODE_ADDRESS: ${MYSQLD_WSREP_NODE_ADDRESS} not matched any host_ip!" >&2

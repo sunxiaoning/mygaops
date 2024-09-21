@@ -54,8 +54,6 @@ WSREP_CLUSTER_ADDRESS_ARRAY=()
 TEMP_FILES=()
 
 start() {
-  check-clusteraddress
-
   check-bootstrap
 
   if ! rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &>/dev/null; then
@@ -113,14 +111,14 @@ init() {
 
   local temp_password=$(journalctl -u mysqld | grep 'temporary password' | tail -n 1 | awk '{print $NF}')
   if [ -z "${temp_password}" ]; then
-    echo "Error: can't find temp_password, may be not init success or install log expired, you can run 'reinit' command to reinit mysqld."
-    exit 1
+    echo "[Warning] Temporary password not found. Potential reasons include: failed initialization, expired logs, or initialization may have already been performed on another node. If initialization failed, consider using the 'reinit-server' command to reinitialize MySQL."
+    return 0
   fi
 
   MYSQL_ADMIN_PASSWORD="${temp_password}"
 
   if ! check-init-status; then
-    echo "Connection with temp_password failed, MySQL has likely been initialized. Skipping initialization."
+    echo "[Warning] Unable to connect using the temporary password. MySQL may have already been initialized. Skipping initialization."
     return 0
   fi
 
@@ -157,6 +155,13 @@ check-bootstrap() {
 }
 
 check-safe-bootstrap() {
+  if [[ -z "${MYSQLD_WSREP_NODE_ADDRESS}" ]]; then
+    echo "MYSQLD_WSREP_NODE_ADDRESS param is invalid!" >&2
+    exit 1
+  fi
+
+  check-clusteraddress
+
   if [ ! -d "${MYSQLD_DATADIR}" ]; then
     echo "MySQL installation status abnormal: Directory ${MYSQLD_DATADIR} does not exist." >&2
     exit 1
@@ -166,6 +171,8 @@ check-safe-bootstrap() {
     echo "Error: require ${EXECRSH_SH_FILE}, but not found!" >&2
     exit 1
   fi
+
+  echo "Start checking current node: ${MYSQLD_WSREP_NODE_ADDRESS} grastate..."
 
   local safe_to_bootstrap
   safe_to_bootstrap=$(check-galera-safebootstrap)
@@ -178,7 +185,7 @@ check-safe-bootstrap() {
         continue
       fi
 
-      echo "Start checking node: ${node_address} grastate..."
+      echo "Checking node: ${node_address} grastate..."
 
       local tmp_file_node_seqno
       tmp_file_node_seqno=$(mktemp -t node_seqno-XXXXXX)
@@ -272,6 +279,13 @@ check-clusteraddress() {
     exit 1
   fi
 
+  WSREP_CLUSTER_ADDRESS_ARRAY=($(printf "%s\n" "${WSREP_CLUSTER_ADDRESS_ARRAY[@]}" | LC_ALL=C sort -s -t '.' -k1,1n -k2,2n -k3,3n -k4,4n))
+
+  if [[ -z "${MYSQLD_WSREP_NODE_ADDRESS}" ]]; then
+    echo "MYSQLD_WSREP_NODE_ADDRESS param is invalid!" >&2
+    exit 1
+  fi
+
   local check_hostip_error=$("${CHECKHOSTIP_SH_FILE}" "${MYSQLD_WSREP_NODE_ADDRESS}" 2>&1 || true)
   if [ ! -z "${check_hostip_error}" ]; then
     echo "MYSQLD_WSREP_NODE_ADDRESS: ${MYSQLD_WSREP_NODE_ADDRESS} not matched any host_ip!" >&2
@@ -302,8 +316,6 @@ reinit() {
     exit 1
   fi
 
-  # TODO find the most update node
-
   if ! rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &>/dev/null; then
     echo "${GALERA_NAME}-${GALERA_VERSION} has not been installed yet!"
     exit 1
@@ -327,6 +339,8 @@ reinit() {
   echo "Stopping service mysqld..."
   stop
 
+  check-safe-bootstrap
+
   echo "Cleaning MySQL datadir..."
   rm -rf ${MYSQLD_DATADIR}
 
@@ -343,9 +357,10 @@ reinit() {
   start
 
   echo "Searching MySQL temp password..."
+
   local temp_password=$(grep 'temporary password' "${err_log}" | tail -n 1 | awk '{print $NF}')
   if [ -z "${temp_password}" ]; then
-    echo "Error: can't find temp_password, may be not init success! you can run 'reinit' command again to reinit mysqld." >&2
+    echo "Error: Temporary password not found. Potential reasons include: failed initialization, expired logs, or initialization may have already been performed on another node. If initialization failed, consider using the 'reinit-server' command to reinitialize MySQL."
     exit 1
   fi
   MYSQL_ADMIN_PASSWORD="${temp_password}"
@@ -357,8 +372,6 @@ reinit() {
   fi
 
   setpassword
-
-  echo "Already reinitialized." >>"${MYSQLD_DATADIR}/.initialized"
 }
 
 setpassword() {
@@ -456,6 +469,8 @@ stop() {
   if [[ "${service_status}" == "inactive" ]] || [[ "${service_status}" == "dead" ]]; then
     return 0
   fi
+
+  reset-failed
 
   if ! timeout "${MYSQLDOP_TIMEOUT_DURATION}" systemctl stop mysqld; then
     echo "Error: Service mysqld failed to stop within ${MYSQLDOP_TIMEOUT_DURATION} or encountered an error."
