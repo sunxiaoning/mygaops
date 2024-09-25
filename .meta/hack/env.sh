@@ -13,6 +13,5 @@ REL_TAG="v${PKG_VERSION}"
 REL_TITLE="Release v${PKG_VERSION}"
 REL_NOTES="
 ## Improvements
-- Removed the \`BOOSTRAP\` environment variable to simplify the \`start\` and \`init\` logic.
-- Optimized the \`check-safe-bootstrap\` function for simplicity, clarity, and independence from other nodes.
+- Optimized \`basegrastate.sh\` by adding markable info to the output, making it easier to extract Galera state information.
 "
