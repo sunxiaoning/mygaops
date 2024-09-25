@@ -3,9 +3,6 @@
 SCRIPT_DIR=$(dirname "$(realpath "${BASH_SOURCE}")")
 SCRIPT_NAME=$(basename "$0")
 
-TERMINATE_DONE=0
-CLEAN_DONE=0
-
 trap __terminate INT TERM
 trap __cleanup EXIT
 
@@ -13,7 +10,6 @@ trap __cleanup EXIT
 
 . ${SCRIPT_DIR}/basegrastate.sh
 
-BOOTSTRAP=${BOOTSTRAP:-"0"}
 EXECRSH_SH_FILE="${SCRIPT_DIR}/../bashutils/execrsh.sh"
 
 # TODO is safe, var scope ???
@@ -54,7 +50,12 @@ WSREP_CLUSTER_ADDRESS_ARRAY=()
 TEMP_FILES=()
 
 start() {
-  check-bootstrap
+  if [[ -z "${MYSQLD_WSREP_NODE_ADDRESS}" ]]; then
+    echo "MYSQLD_WSREP_NODE_ADDRESS param is invalid!" >&2
+    exit 1
+  fi
+
+  check-clusteraddress
 
   if ! rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &>/dev/null; then
     echo "${GALERA_NAME}-${GALERA_VERSION} has not been installed yet!" >&2
@@ -73,17 +74,15 @@ start() {
 
   setsegalera
 
-  reset-failed
-
-  if [[ "1" == "${BOOTSTRAP}" ]]; then
-    check-safe-bootstrap
-
+  local error_bootstrap=$(check-safe-bootstrap 2>&1 >/dev/null | tee /dev/stderr)
+  if [[ -z "${error_bootstrap-}" ]]; then
     echo "Bootstrap mysqld ..."
     if ! timeout "${MYSQLDOP_TIMEOUT_DURATION}" mysqld_bootstrap; then
       echo "Error: Service mysqld failed to bootstrap within ${MYSQLDOP_TIMEOUT_DURATION} or encountered an error." >&2
       exit 1
     fi
   else
+    echo "Start mysqld..."
     if ! timeout "${MYSQLDOP_TIMEOUT_DURATION}" systemctl start mysqld; then
       echo "Error: Service mysqld failed to start within ${MYSQLDOP_TIMEOUT_DURATION} or encountered an error." >&2
       exit 1
@@ -97,13 +96,6 @@ start() {
 }
 
 init() {
-  check-bootstrap
-
-  if [[ "1" != "${BOOTSTRAP}" ]]; then
-    echo "BOOTSTRAP is not true, init abort!"
-    exit 1
-  fi
-
   if ! systemctl is-active --quiet mysqld; then
     echo "mysqld is not running!"
     exit 1
@@ -143,17 +135,8 @@ check-init-status() {
   return 0
 }
 
-check-bootstrap() {
-  case "${BOOTSTRAP}" in
-  0) ;;
-  1) ;;
-  *)
-    echo "Unknown BOOTSTRAP: ${BOOTSTRAP}!"
-    exit 1
-    ;;
-  esac
-}
-
+# can't ensure grastate is completely correct, but try the best efforts.
+# but galera cluster will be the last line to abort abnormal status.
 check-safe-bootstrap() {
   if [[ -z "${MYSQLD_WSREP_NODE_ADDRESS}" ]]; then
     echo "MYSQLD_WSREP_NODE_ADDRESS param is invalid!" >&2
@@ -174,96 +157,20 @@ check-safe-bootstrap() {
 
   echo "Start checking current node: ${MYSQLD_WSREP_NODE_ADDRESS} grastate..."
 
-  local safe_to_bootstrap
-  safe_to_bootstrap=$(check-galera-safebootstrap)
+  stop
 
-  if [ -z "${safe_to_bootstrap}" ]; then
+  local safe_to_bootstrap=$(check-galera-safebootstrap || true)
 
-    for index in "${!WSREP_CLUSTER_ADDRESS_ARRAY[@]}"; do
-      local node_address=${WSREP_CLUSTER_ADDRESS_ARRAY[$index]}
-      if [[ "${node_address}" == "${MYSQLD_WSREP_NODE_ADDRESS}" ]]; then
-        continue
-      fi
-
-      echo "Checking node: ${node_address} grastate..."
-
-      local tmp_file_node_seqno
-      tmp_file_node_seqno=$(mktemp -t node_seqno-XXXXXX)
-
-      TEMP_FILES+=("${tmp_file_node_seqno}")
-
-      "${EXECRSH_SH_FILE}" -e "-o BatchMode=yes" -p "${SCRIPT_DIR}/../bashutils/ ${SCRIPT_DIR}/../hack/" -a "check-seqno" -r "${tmp_file_node_seqno}" "${node_address}" "hack/grastate.sh"
-
-      local node_seqno
-      node_seqno=$(cat "${tmp_file_node_seqno}")
-
-      if [[ -z "${node_seqno-}" ]]; then
-        continue
-      fi
-
-      if [[ "${node_seqno}" == *"Error:"* ]]; then
-        echo "check node_seqno failed, ${node_seqno}."
-        exit 1
-      fi
-
-      if [[ -n "${node_seqno}" ]]; then
-        echo "Error: Galera cluster state is inconsistent, abort operation. node_seqno: ${node_seqno}" >&2
-        exit 1
-      fi
-
-    done
-
+  if [ -z "${safe_to_bootstrap-}" ]; then
+    echo "[Warning] check-galera-safebootstrap failed! safe_to_bootstrap is unknown."
     return 0
   fi
 
   if [ "${safe_to_bootstrap}" -ne 1 ]; then
-    echo "[Warning] Bootstrap status abnormal: safe_to_bootstrap=${safe_to_bootstrap}.Bootstrap operation is being skipped."
+    echo "Error: Bootstrap status abnormal: safe_to_bootstrap=${safe_to_bootstrap}." >&2
     echo "[Warning] Please try to start MySQL directly.If you really need to bootstrap this node, modify safe_to_bootstrap=1 in ${GRSTATE_FILE}, but this is risky, please ensure this node is the most up-to-date and check all nodes before proceeding!"
     exit 1
   fi
-
-  local seqno
-  seqno=$(check-galera-seqno)
-
-  if [ -z "${seqno}" ]; then
-    echo "MySQL state file abnormal: Missing required fields in ${GRSTATE_FILE}." >&2
-    exit 1
-  fi
-
-  for index in "${!WSREP_CLUSTER_ADDRESS_ARRAY[@]}"; do
-    local node_address=${WSREP_CLUSTER_ADDRESS_ARRAY[$index]}
-    if [[ "${node_address}" == "${MYSQLD_WSREP_NODE_ADDRESS}" ]]; then
-      continue
-    fi
-
-    echo "Start checking node: ${node_address} grastate..."
-
-    local tmp_file_node_seqno
-    tmp_file_node_seqno=$(mktemp -t node_seqno-XXXXXX)
-
-    TEMP_FILES+=("${tmp_file_node_seqno}")
-
-    "${EXECRSH_SH_FILE}" -e "-o BatchMode=yes" -p "${SCRIPT_DIR}/../bashutils/ ${SCRIPT_DIR}/../hack/" -a "check-seqno" -r "${tmp_file_node_seqno}" "${node_address}" "hack/grastate.sh"
-
-    local node_seqno
-    node_seqno=$(cat "${tmp_file_node_seqno}")
-
-    if [[ -z "${node_seqno-}" ]]; then
-      continue
-    fi
-
-    if [[ "${node_seqno}" == *"Error:"* ]]; then
-      echo "check node_seqno failed, ${node_seqno}."
-      exit 1
-    fi
-
-    echo "Comparing seqno with node: ${node_address} ..."
-
-    if [[ "${node_seqno}" -gt "${seqno}" ]]; then
-      echo "Error: ${MYSQLD_WSREP_NODE_ADDRESS} is not the most recent commit, abort operation." >&2
-      exit 1
-    fi
-  done
 }
 
 check-clusteraddress() {
@@ -310,12 +217,6 @@ check-clusteraddress() {
 }
 
 reinit() {
-  check-bootstrap
-  if [[ "0" == "${BOOTSTRAP}" ]]; then
-    echo "BOOTSTRAP false, reinit abort!"
-    exit 1
-  fi
-
   if ! rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &>/dev/null; then
     echo "${GALERA_NAME}-${GALERA_VERSION} has not been installed yet!"
     exit 1
@@ -336,10 +237,12 @@ reinit() {
     exit 1
   fi
 
-  echo "Stopping service mysqld..."
-  stop
-
-  check-safe-bootstrap
+  echo "Checking safe-bootstrap ..."
+  local error_bootstrap=$(check-safe-bootstrap 2>&1 >/dev/null | tee /dev/stderr)
+  if [[ -n "${error_bootstrap-}" ]]; then
+    echo "Error: check-safe-bootstrap failed, abort the operation." >&2
+    exit 1
+  fi
 
   echo "Cleaning MySQL datadir..."
   rm -rf ${MYSQLD_DATADIR}
@@ -375,14 +278,6 @@ reinit() {
 }
 
 setpassword() {
-  check-bootstrap
-
-  # TODO check is the first node of cluster
-
-  if [[ "1" != "${BOOTSTRAP}" ]]; then
-    echo "BOOTSTRAP is not true, setpassword abort!"
-    exit 1
-  fi
 
   check-mysql-admin-password
 
@@ -473,7 +368,7 @@ stop() {
   reset-failed
 
   if ! timeout "${MYSQLDOP_TIMEOUT_DURATION}" systemctl stop mysqld; then
-    echo "Error: Service mysqld failed to stop within ${MYSQLDOP_TIMEOUT_DURATION} or encountered an error."
+    echo "Error: Service mysqld failed to stop within ${MYSQLDOP_TIMEOUT_DURATION} or encountered an error." >&2
     exit 1
   fi
 
@@ -481,7 +376,7 @@ stop() {
   if [[ "${service_status}" == "inactive" ]] || [[ "${service_status}" == "dead" ]]; then
     return 0
   fi
-  echo "Error: Service mysqld is not stopped properly. Current status: ${service_status}."
+  echo "Error: Service mysqld is not stopped properly. Current status: ${service_status}." >&2
   exit 1
 }
 
@@ -595,6 +490,12 @@ main() {
     ;;
   check-node)
     check-node
+    ;;
+  check-galera-seqno)
+    check-galera-seqno
+    ;;
+  check-galera-safebootstrap)
+    check-galera-safebootstrap
     ;;
   check-cluster)
     check-cluster

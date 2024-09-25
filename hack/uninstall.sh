@@ -18,6 +18,8 @@ uninstall-app() {
     fi
   fi
 
+  # TODO check-safebootstrap, the last commit node should be the last node to be uninstalled.
+
   yum -y remove "${GALERA_NAME}-${GALERA_VERSION}"
   if rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &>/dev/null; then
     echo "Remove Galera4 failed!" >&2

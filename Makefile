@@ -48,6 +48,15 @@ check-node:
 	@echo "Check node mysql-wsrep status ..."
 	hack/run.sh check-node
 
+check-galera-safebootstrap:
+	$(MAKE) stop 
+	@echo "Check galera safebootstrap ..."
+	hack/run.sh check-galera-safebootstrap
+
+check-galera-seqno:
+	@echo "Check galera seqno ..."
+	hack/run.sh check-galera-seqno
+
 check-cluster:
 	@echo "Check cluster mysql-wsrep status ..."
 	hack/run.sh check-cluster
@@ -57,8 +66,8 @@ stop:
 	hack/run.sh stop
 
 restart: 
-	(MAKE) stop 
-	(MAKE) start
+	$(MAKE) stop 
+	$(MAKE) start
 
 uninstall-app:
 	@echo "Uninstall app ..."
