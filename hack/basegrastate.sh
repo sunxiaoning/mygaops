@@ -2,7 +2,7 @@ GRSTATE_FILE="${MYSQLD_DATADIR}/grastate.dat"
 
 parse-galera-safebootstrap() {
   if [ ! -f "${GRSTATE_FILE}" ] || [ ! -s "${GRSTATE_FILE}" ]; then
-    echo ""
+    echo "result-galera-safebootstrap: "
     return 0
   fi
   local safe_to_bootstrap=$(grep "^safe_to_bootstrap:" "${GRSTATE_FILE}" | awk '{print $2}')
@@ -11,12 +11,12 @@ parse-galera-safebootstrap() {
     echo "MySQL state file abnormal: Missing required fields in ${GRSTATE_FILE}." >&2
     return 1
   fi
-  echo "${safe_to_bootstrap}"
+  echo "result-galera-safebootstrap: ${safe_to_bootstrap}"
 }
 
 parse-galera-seqno() {
   if [ ! -f "${GRSTATE_FILE}" ] || [ ! -s "${GRSTATE_FILE}" ]; then
-    echo ""
+    echo "result-galera-seqno: "
     return 0
   fi
   local seqno=$(grep "^seqno:" "${GRSTATE_FILE}" | awk '{print $2}')
@@ -24,7 +24,7 @@ parse-galera-seqno() {
     echo "MySQL state file abnormal: Missing required fields in ${GRSTATE_FILE}." >&2
     return 1
   fi
-  echo "${seqno}"
+  echo "result-galera-seqno: ${seqno}"
 }
 
 check-galera-mysqld-stopped() {
