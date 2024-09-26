@@ -12,6 +12,6 @@ PKG_NAME="mygaops-${PKG_VERSION}.tar.gz"
 REL_TAG="v${PKG_VERSION}"
 REL_TITLE="Release v${PKG_VERSION}"
 REL_NOTES="
-## Improvements
-- Optimized \`basegrastate.sh\` by adding markable info to the output, making it easier to extract Galera state information.
+## Bug Fixes
+- Fixed the \`safe_to_bootstrap\` extraction logic.
 "
