@@ -159,7 +159,7 @@ check-safe-bootstrap() {
 
   stop
 
-  local safe_to_bootstrap=$(check-galera-safebootstrap || true)
+  local safe_to_bootstrap=$(check-galera-safebootstrap | grep "^result-galera-safebootstrap: " | awk '{print $2}' || true)
 
   if [ -z "${safe_to_bootstrap-}" ]; then
     echo "[Warning] check-galera-safebootstrap failed! safe_to_bootstrap is unknown."
