@@ -12,6 +12,8 @@ trap __cleanup EXIT
 
 EXECRSH_SH_FILE="${SCRIPT_DIR}/../bashutils/execrsh.sh"
 
+BOOTSTRAP=${BOOTSTRAP:-"0"}
+
 # TODO is safe, var scope ???
 NEW_PASSWORD=${NEW_PASSWORD:-""}
 HOME_DIR=$(__get-original-home-dir)
@@ -50,6 +52,8 @@ WSREP_CLUSTER_ADDRESS_ARRAY=()
 TEMP_FILES=()
 
 start() {
+  check-bootstrap
+
   if [[ -z "${MYSQLD_WSREP_NODE_ADDRESS}" ]]; then
     echo "MYSQLD_WSREP_NODE_ADDRESS param is invalid!" >&2
     exit 1
@@ -74,8 +78,11 @@ start() {
 
   setsegalera
 
-  local error_bootstrap=$(check-safe-bootstrap 2>&1 >/dev/null | tee /dev/stderr)
-  if [[ -z "${error_bootstrap-}" ]]; then
+  # A new node can choose to boostrap a new cluster, or joinning an exists cluster.
+  if [[ "1" == "${BOOTSTRAP}" ]]; then
+    echo "Checking safe-boostrap..."
+    check-safe-bootstrap
+
     echo "Bootstrap mysqld ..."
     if ! timeout "${MYSQLDOP_TIMEOUT_DURATION}" mysqld_bootstrap; then
       echo "Error: Service mysqld failed to bootstrap within ${MYSQLDOP_TIMEOUT_DURATION} or encountered an error." >&2
@@ -96,6 +103,7 @@ start() {
 }
 
 init() {
+
   if ! systemctl is-active --quiet mysqld; then
     echo "mysqld is not running!"
     exit 1
@@ -120,6 +128,17 @@ init() {
   fi
 
   setpassword
+}
+
+check-bootstrap() {
+  case "${BOOTSTRAP}" in
+  0) ;;
+  1) ;;
+  *)
+    echo "Unknown BOOTSTRAP: ${BOOTSTRAP}!"
+    exit 1
+    ;;
+  esac
 }
 
 check-init-status() {
