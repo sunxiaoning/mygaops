@@ -40,10 +40,6 @@ autorun:
 	$(MAKE) install 
 	$(MAKE) start
 
-autoboot: 
-	$(MAKE) autorun 
-	$(MAKE) init-server
-
 check-node:
 	@echo "Check node mysql-wsrep status ..."
 	hack/run.sh check-node

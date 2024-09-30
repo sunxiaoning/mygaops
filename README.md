@@ -5,63 +5,62 @@ Provide a focused set of tools for executing individual operations on MySQL Gale
 
 ### 1. Setting Up a MySQL Galera Cluster
 >__Note:__
->1. Ensure that all nodes can communicate with each other via passwordless SSH to properly set up a MySQL Galera Cluster.
->2. To successfully set up a MySQL Galera Cluster, you must have sudo or root privileges.
->3. The recommended test environments are Rocky Linux 8 and RHEL 8; other operating systems are currently unsupported to ensure optimal setup and reliability.
->4. Galera-4 and MySQL-WSREP 8.0 are required; Galera-3 and MySQL-WSREP 5.7 are not recommended and have not been tested.
->5. If you specify a custom version of Galera-4 and MySQL WSREP 8.0, you must ensure that the same version is installed on all cluster nodes.
+>1. To successfully set up a MySQL Galera Cluster, you must have sudo or root privileges.
+>2. The recommended test environments are Rocky Linux 8 and RHEL 8; other operating systems are currently unsupported to ensure optimal setup and reliability.
+>3. Galera-4 and MySQL-WSREP 8.0 are required; Galera-3 and MySQL-WSREP 5.7 are not recommended and have not been tested.
+>4. If you specify a custom version of Galera-4 and MySQL WSREP 8.0, you must ensure that the same version is installed on all cluster nodes.
 
-#### 1.1 Initial Node Setup
+#### 1.1 Start Up the MySQL Galera Cluster
+>__Note:__
+> The first node must be started in bootstrap mode, while all subsequent nodes should be started in join mode.
+
 ```bash
-# 1. Set bootstrap mode
-export BOOTSTRAP=1
+# 1. Set the startup mode (defaults to join mode, 0)
+#    Bootstrap mode: Used only for the initial node in the cluster to initialize it.
+#    Join mode: Used for all subsequent nodes to join the initialized cluster.
+export BOOTSTRAP=1  # 1: bootstrap mode for the first node, 0: join mode for other nodes
 
 # 2. Set the cluster node addresses
 export MYSQLD_WSREP_CLUSTER_ADDRESS=<node1_ip,node2_ip,node3_ip>  # Cluster node addresses
 export MYSQLD_WSREP_NODE_ADDRESS=<current_node_ip> # Current node IP address
 
-# 3. (Optional) Set a new password for the Galera cluster (default to generating a random password at file: ~/.mygaops/.dmypasswd.txt)
-# Recommend: Method1
-export NEW_PASSWORD_FILE=<new_passoword_file_path> # Password file path (default:  ~/.mygaops/.dmypasswd.txt)
-# Alternative: Method 2
-export NEW_PASSWORD=<new_passoword> # Directly specify the new password
 
-# 4. (Optional) Use a private repository (defaults to official repo if not set)
-export REPO_SOURCE=1 # Enable private repository 
+# 3. (Optional) Use a private repository for package installation
+#    Default: 0 (use the official repository)
+export REPO_SOURCE=1 # 0: official repo, 1. private repo 2. local repo
 export REPO_SERVER_PROTOCOL=<http/https>  # Set the repo protocol (default: http)
 export REPO_SERVER_NAME=<repo_server_name> # Set the repo server name (default: localhost)
 
-# 5. (Optional) Specify the version of the software package to be installed.
+# 4. (Optional) Specify the version of the software package to be installed.
 export GALERA_VERSION=<GALERA_VERSION> # Set the Galera Version (default: 26.4.19)
 export MYSQL_WSREP_VERSION=<MYSQL_WSREP_VERSION> # Set the MySQL WSREP Version (default: 8.0.37)
 
-# 6. Run the setup command
-sudo make autoboot
+# 5. Run the setup command
+sudo make autorun
 ```
-#### 1.2 Setup for Other Nodes
+
+#### 1.2. Initialize the MySQL Galera Cluster
+>__Note:__
+>1. The `init-server` command is run only on the initial node to initialize the cluster.
+>2. If you wish to set a new root password, escape special characters in the password string.
+
 ```bash
 
-# 1. Set the cluster node addresses
-export MYSQLD_WSREP_CLUSTER_ADDRESS=<node1_ip,node2_ip,node3_ip> # Cluster node addresses
-export MYSQLD_WSREP_NODE_ADDRESS=<current_node_ip> # Current node IP address
+# 1. (Optional) Set a new password for the MySQL Galera cluster
+#    Recommended: Use a password file (Method 1)
+export NEW_PASSWORD_FILE="/path/to/password_file"  # Path to password file (default: ~/.mygaops/.dmypasswd.txt)
 
-# 2. (Optional) Use a private repository (defaults to official repo if not set)
-export REPO_SOURCE=1 # Enable private repository
-export REPO_SERVER_PROTOCOL=<http/https> # Set the repo protocol (default: http)
-export REPO_SERVER_NAME=<repo_server_name> # Set the repo server name (default: localhost)
+#    Alternatively, directly specify the new password (Method 2)
+export NEW_PASSWORD="NewSecurePassword123!"  # Manually set new password
 
-# 3. (Optional) Specify the version of the software package to be installed.
-export GALERA_VERSION=<GALERA_VERSION> # Set the Galera Version (default: 26.4.19)
-export MYSQL_WSREP_VERSION=<MYSQL_WSREP_VERSION> # Set the MySQL WSREP Version (default: 8.0.37)
-
-# 4. Run the setup command
-sudo make autorun
+# 2. Run the init-server command
+sudo make init-server
 ```
 
 ### 2. Checking the MySQL Galera Cluster
 >__Note:__ `MYSQLD_WSREP_CLUSTER_SIZE` should represent the expected cluster size for validation.If the check passes, you will see output like this: "The node: <current_node_ip> of the cluster is healthy and operational." This confirms that the current node is functioning correctly within the cluster.
 ```bash
-sudo MYSQLD_WSREP_NODE_ADDRESS=<current_node_ip> MYSQLD_WSREP_CLUSTER_SIZE=<expected_cluster_size> make check-node
+sudo MYSQLD_WSREP_NODE_ADDRESS=<current_node_ip> MYSQLD_WSREP_CLUSTER_SIZE=<expected_cluster_size> make check-cluster
 ```
 ---
 ## Node Operation Details
