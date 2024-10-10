@@ -1,11 +1,18 @@
-. ${SCRIPT_DIR}/../bashutils/basicenv.sh
+set -o nounset
+set -o errexit
+set -o pipefail
 
 USE_DOCKER=${USE_DOCKER:-"0"}
 
-GALERA_NAME=${GALERA_NAME:-"galera-4"}
-GALERA_VERSION=${GALERA_VERSION:-"26.4.19"}
+PKG_PATH="hack/pack"
 
-MYSQL_WSREP_NAME=${MYSQL_WSREP_NAME:-"mysql-wsrep-8.0"}
-MYSQL_WSREP_VERSION=${MYSQL_WSREP_VERSION:-"8.0.37"}
+PKG_VERSION="1.1.11"
+PKG_NAME="mygaops-${PKG_VERSION}.tar.gz"
 
-MYSQLD_DATADIR=/var/lib/mysql
+REL_TAG="v${PKG_VERSION}"
+REL_TITLE="Release v${PKG_VERSION}"
+REL_NOTES="
+## Improvements
+- Removed the \`make\` dependency in MySQL Galera Cluster operation.
+- Added \`mygaops.sh\` as an interface for operating Galera Cluster.
+"

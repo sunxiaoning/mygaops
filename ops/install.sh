@@ -1,7 +1,7 @@
 #!/bin/bash
 SCRIPT_DIR=$(dirname "$(realpath "${BASH_SOURCE}")")
 
-. hack/env.sh
+. ops/env.sh
 
 RPMREPO_MODULE=rpmrepo
 
@@ -31,7 +31,11 @@ CHECKHOSTIP_SH_FILE="${SCRIPT_DIR}/../bashutils/checkhostip.sh"
 
 install-repo() {
   cd "${RPMREPO_MODULE}"
-  make install-repogalera4
+
+  hack/build.sh galera4
+
+  hack/install.sh galera4
+
   yum clean all &>/dev/null
   yum makecache
   cd "${PROJECT_PATH}"
@@ -44,7 +48,7 @@ install-app() {
   fi
 
   if [[ "1" == "${STOP_SERV_ON_INSTALL}" ]]; then
-    hack/run.sh stop
+    ops/run.sh stop
   else
     local service_status=$(systemctl is-active mysqld 2>/dev/null || true)
     if [[ "${service_status}" != "inactive" ]] && [[ "${service_status}" != "dead" ]]; then

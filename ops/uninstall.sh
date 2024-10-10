@@ -2,14 +2,14 @@
 
 SCRIPT_DIR=$(dirname "$(realpath "${BASH_SOURCE}")")
 
-. hack/env.sh
+. ops/env.sh
 
 CLEAN_DATA_ON_UNINSTALL=${CLEAN_DATA_ON_UNINSTALL:-"0"}
 STOP_SERV_ON_UNINSTALL=${STOP_SERV_ON_UNINSTALL:-"0"}
 
 uninstall-app() {
   if [[ "1" == "${STOP_SERV_ON_UNINSTALL}" ]]; then
-    hack/run.sh stop
+    ops/run.sh stop
   else
     local service_status=$(systemctl is-active mysqld 2>/dev/null || true)
     if [[ "${service_status}" != "inactive" ]] && [[ "${service_status}" != "dead" ]]; then

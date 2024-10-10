@@ -33,7 +33,7 @@ main() {
     check-seqno
     ;;
   *)
-    echo "Action not supported! Available actions: check-safebootstrap, check-seqno."
+    echo "The operation: ${1-} is not supported!"
     ;;
   esac
 }

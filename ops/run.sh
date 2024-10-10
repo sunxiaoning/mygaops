@@ -529,7 +529,8 @@ main() {
     stop
     ;;
   *)
-    echo "Action not support! start/stop/restart only!"
+    echo "The operation: ${1-} is not supported!"
+    exit 1
     ;;
   esac
 }

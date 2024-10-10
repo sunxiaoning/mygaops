@@ -3,14 +3,14 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
-. .meta/hack/env.sh
+. hack/env.sh
 
 trap cleanup EXIT
 
 CLEAN_DONE=0
 cleanup() {
   if [[ ${CLEAN_DONE} -eq 1 ]]; then
-      return
+    return
   fi
   CLEAN_DONE=1
   echo "Received signal EXIT, performing cleanup..."
