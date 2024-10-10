@@ -3,12 +3,13 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
-. .meta/hack/env.sh
+. hack/env.sh
 
 EXCLUDES=(
+  --exclude='*/Makefile'
   --exclude='*/.DS_Store'
   --exclude='*/README.md'
-  --exclude='*/.meta'
+  --exclude='*/hack'
   --exclude='*/.gh_token.txt'
   --exclude='*/.git'
   --exclude='*/.git*'
