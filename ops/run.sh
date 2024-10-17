@@ -1,16 +1,4 @@
-#!/bin/bash
-
-SCRIPT_DIR=$(dirname "$(realpath "${BASH_SOURCE}")")
-SCRIPT_NAME=$(basename "$0")
-
-trap __terminate INT TERM
-trap __cleanup EXIT
-
-. ${SCRIPT_DIR}/env.sh
-
-. ${SCRIPT_DIR}/basegrastate.sh
-
-EXECRSH_SH_FILE="${SCRIPT_DIR}/../bashutils/execrsh.sh"
+. ${OPS_SH_DIR}/basegrastate.sh
 
 BOOTSTRAP=${BOOTSTRAP:-"0"}
 
@@ -23,8 +11,6 @@ NEW_PASSWORD_FILE=${NEW_PASSWORD_FILE:-"${DEFAULT_NEW_PASSWORD_FILE}"}
 
 # TODO version controllf
 PWGEN_VERSION="2.08"
-
-YUMINSTALLER_SH_FILE="${SCRIPT_DIR}/../bashutils/yuminstaller.sh"
 
 MYSQL_ADMIN_USER="root"
 MYSQL_ADMIN_PASSWORD=${MYSQL_ADMIN_PASSWORD:-""}
@@ -41,15 +27,9 @@ MYSQL_PASSWORD_FILE=${MYSQL_PASSWORD_FILE:-"${NEW_PASSWORD_FILE}"}
 MYSQL_HOST=${MYSQL_HOST:-"localhost"}
 MYSQL_PORT=${MYSQL_PORT:-"3306"}
 
-MYSQLD_WSREP_NODE_ADDRESS=${MYSQLD_WSREP_NODE_ADDRESS:-""}
-CHECKHOSTIP_SH_FILE="${SCRIPT_DIR}/../bashutils/checkhostip.sh"
-
 MYSQLD_WSREP_CLUSTER_SIZE=${MYSQLD_WSREP_CLUSTER_SIZE:-""}
 
-MYSQLD_WSREP_CLUSTER_ADDRESS=${MYSQLD_WSREP_CLUSTER_ADDRESS:-""}
 WSREP_CLUSTER_ADDRESS_ARRAY=()
-
-TEMP_FILES=()
 
 start() {
   check-bootstrap
@@ -102,10 +82,10 @@ start() {
   fi
 }
 
-init() {
+init-server() {
 
   if ! systemctl is-active --quiet mysqld; then
-    echo "mysqld is not running!"
+    echo "Service mysqld is not running!"
     exit 1
   fi
 
@@ -127,7 +107,7 @@ init() {
     gen-newpassword
   fi
 
-  setpassword
+  reset-password
 }
 
 check-bootstrap() {
@@ -169,11 +149,6 @@ check-safe-bootstrap() {
     exit 1
   fi
 
-  if [[ ! -f "${EXECRSH_SH_FILE}" ]]; then
-    echo "Error: require ${EXECRSH_SH_FILE}, but not found!" >&2
-    exit 1
-  fi
-
   echo "Start checking current node: ${MYSQLD_WSREP_NODE_ADDRESS} grastate..."
 
   stop
@@ -192,50 +167,7 @@ check-safe-bootstrap() {
   fi
 }
 
-check-clusteraddress() {
-  if [ -z "${MYSQLD_WSREP_CLUSTER_ADDRESS}" ]; then
-    echo "MYSQLD_WSREP_CLUSTER_ADDRESS is empty!" >&2
-    exit 1
-  fi
-
-  IFS=',' read -r -a WSREP_CLUSTER_ADDRESS_ARRAY <<<"${MYSQLD_WSREP_CLUSTER_ADDRESS}"
-
-  if [ "${#WSREP_CLUSTER_ADDRESS_ARRAY[@]}" -lt 2 ]; then
-    echo "MYSQLD_WSREP_CLUSTER_ADDRESS is invalid!" >&2
-    exit 1
-  fi
-
-  WSREP_CLUSTER_ADDRESS_ARRAY=($(printf "%s\n" "${WSREP_CLUSTER_ADDRESS_ARRAY[@]}" | LC_ALL=C sort -s -t '.' -k1,1n -k2,2n -k3,3n -k4,4n))
-
-  if [[ -z "${MYSQLD_WSREP_NODE_ADDRESS}" ]]; then
-    echo "MYSQLD_WSREP_NODE_ADDRESS param is invalid!" >&2
-    exit 1
-  fi
-
-  local check_hostip_error=$("${CHECKHOSTIP_SH_FILE}" "${MYSQLD_WSREP_NODE_ADDRESS}" 2>&1 || true)
-  if [ ! -z "${check_hostip_error}" ]; then
-    echo "MYSQLD_WSREP_NODE_ADDRESS: ${MYSQLD_WSREP_NODE_ADDRESS} not matched any host_ip!" >&2
-    exit 1
-  fi
-
-  MYSQLD_WSREP_NODE_ADDRESS_INDEX="-1"
-  for index in "${!WSREP_CLUSTER_ADDRESS_ARRAY[@]}"; do
-    if [ "${WSREP_CLUSTER_ADDRESS_ARRAY[$index]}" != "${MYSQLD_WSREP_NODE_ADDRESS}" ]; then
-      continue
-    fi
-
-    MYSQLD_WSREP_NODE_ADDRESS_INDEX="$index"
-    break
-
-  done
-
-  if [[ ${MYSQLD_WSREP_NODE_ADDRESS_INDEX} == "-1" ]]; then
-    echo "MYSQLD_WSREP_NODE_ADDRESS: ${MYSQLD_WSREP_NODE_ADDRESS} not matched any MYSQLD_WSREP_CLUSTER_ADDRESS: ${MYSQLD_WSREP_CLUSTER_ADDRESS} !" >&2
-    exit 1
-  fi
-}
-
-reinit() {
+reinit-server() {
   if ! rpm -q "${GALERA_NAME}-${GALERA_VERSION}" &>/dev/null; then
     echo "${GALERA_NAME}-${GALERA_VERSION} has not been installed yet!"
     exit 1
@@ -293,10 +225,10 @@ reinit() {
     gen-newpassword
   fi
 
-  setpassword
+  reset-password
 }
 
-setpassword() {
+reset-password() {
 
   check-mysql-admin-password
 
@@ -309,7 +241,7 @@ setpassword() {
 
   local setpass_output=$(mysql -u "${MYSQL_ADMIN_USER}" -p"${MYSQL_ADMIN_PASSWORD}" --connect-expired-password -e "ALTER USER '${MYSQL_ADMIN_USER}'@'localhost' IDENTIFIED BY '${NEW_PASSWORD}';" 2>&1)
   if echo "${setpass_output}" | grep -q "ERROR"; then
-    echo "Failed to setpassword: ${setpass_output} !"
+    echo "Failed to reset-password: ${setpass_output} !"
     exit 1
   fi
   unset NEW_PASSWORD
@@ -337,6 +269,12 @@ gen-newpassword() {
     echo "Error: require ${YUMINSTALLER_SH_FILE}, but not found!" >&2
     return 1
   fi
+
+  if ! rpm -q "epel-release" &>/dev/null; then
+    yum install epel-release
+    sed -i 's/enabled=1/enabled=0/' /etc/yum.repos.d/epel.repo
+  fi
+
   "${YUMINSTALLER_SH_FILE}" -o "--enablerepo=epel -y" pwgen "${PWGEN_VERSION}"
   local new_password="$(pwgen -cns 16 1 | sed 's/./!/9')"
   mkdir -p "${DEFAULT_NEW_PASSWORD_DIR}"
@@ -363,6 +301,11 @@ parse-newpassword() {
 }
 
 setsegalera() {
+  status=$(sestatus | grep 'SELinux status' | awk '{print $3}')
+  if [ "$status" == "disabled" ]; then
+    echo "SELinux is disabled, skip setsemysqld_t."
+    return 0
+  fi
   setsemysqld_t
 }
 
@@ -498,55 +441,3 @@ check-mysqlpassword() {
     exit 1
   fi
 }
-
-main() {
-  case "${1-}" in
-  start)
-    start
-    ;;
-  init)
-    init
-    ;;
-  check-node)
-    check-node
-    ;;
-  check-galera-seqno)
-    check-galera-seqno
-    ;;
-  check-galera-safebootstrap)
-    check-galera-safebootstrap
-    ;;
-  check-cluster)
-    check-cluster
-    ;;
-  reinit)
-    reinit
-    ;;
-  reset-password)
-    setpassword
-    ;;
-  stop)
-    stop
-    ;;
-  *)
-    echo "The operation: ${1-} is not supported!"
-    exit 1
-    ;;
-  esac
-}
-
-terminate() {
-  echo "terminating..."
-}
-
-cleanup() {
-  if [[ "${#TEMP_FILES[@]}" -gt 0 ]]; then
-    echo "Cleaning temp_files...."
-
-    for temp_file in "${TEMP_FILES[@]}"; do
-      rm -f "${temp_file}" || true
-    done
-  fi
-}
-
-main "$@"

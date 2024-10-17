@@ -1,140 +1,38 @@
 #!/bin/bash
-SCRIPT_DIR=$(dirname "$(realpath "${BASH_SOURCE}")")
+
+CONTEXT_DIR=$(dirname "$(realpath "${BASH_SOURCE}")")
 SCRIPT_NAME=$(basename "$0")
 
-. ${SCRIPT_DIR}/bashutils/basicenv.sh
+. ${CONTEXT_DIR}/bashutils/basicenv.sh
+
+OPS_SH_DIR="${CONTEXT_DIR}/ops"
+
+. "${OPS_SH_DIR}/env.sh"
+
+. "${OPS_SH_DIR}/install.sh"
+
+. "${OPS_SH_DIR}/run.sh"
+
+. "${OPS_SH_DIR}/uninstall.sh"
+
+TEMP_FILES=()
 
 trap __terminate INT TERM
 trap __cleanup EXIT
 
-HACK_SH_DIR="${SCRIPT_DIR}/ops"
-INSTALL_SH_FILE="${HACK_SH_DIR}/install.sh"
-RUN_SH_FILE="${HACK_SH_DIR}/run.sh"
-UNINSTALL_SH_FILE="${HACK_SH_DIR}/uninstall.sh"
-
-install-repo() {
-  echo "Install repo ..."
-
-  "${INSTALL_SH_FILE}" repo &
-
-  wait $!
-}
-
-install-app() {
-  install-repo
-
-  echo "Install app ..."
-
-  "${INSTALL_SH_FILE}" app &
-
-  wait $!
-}
-
-install-conf() {
-  echo "Install conf ..."
-
-  "${INSTALL_SH_FILE}" conf &
-
-  wait $!
-}
-
-install() {
+autoinstall() {
   install-app
   install-conf
 }
 
-start() {
-  echo "Start server ..."
-
-  "${RUN_SH_FILE}" start &
-
-  wait $!
-}
-
-init-server() {
-  echo "Init server ..."
-
-  "${RUN_SH_FILE}" init &
-
-  wait $!
-}
-
-reinit-server() {
-  echo "Reinit server ..."
-
-  "${RUN_SH_FILE}" reinit &
-
-  wait $!
-}
-
-reset-password() {
-  echo "Reset password ..."
-
-  "${RUN_SH_FILE}" reset-password &
-
-  wait $!
-}
-
 autorun() {
-  install
+  autoinstall
   start
-}
-
-check-node() {
-  echo "Check node mysql-wsrep status ..."
-
-  "${RUN_SH_FILE}" check-node &
-
-  wait $!
-}
-
-check-galera-safebootstrap() {
-  stop
-
-  echo "Check galera safebootstrap ..."
-
-  "${RUN_SH_FILE}" check-galera-safebootstrap &
-
-  wait $!
-}
-
-check-galera-seqno() {
-  stop
-
-  echo "Check galera seqno ..."
-
-  "${RUN_SH_FILE}" check-galera-seqno &
-
-  wait $!
-}
-
-check-cluster() {
-  echo "Check cluster mysql-wsrep status ..."
-
-  "${RUN_SH_FILE}" check-cluster &
-
-  wait $!
-}
-
-stop() {
-  echo "Stop server ..."
-
-  "${RUN_SH_FILE}" stop &
-
-  wait $!
 }
 
 restart() {
   stop
   start
-}
-
-uninstall-app() {
-  echo "Uninstall app ..."
-
-  "${UNINSTALL_SH_FILE}" app &
-
-  wait $!
 }
 
 main() {
@@ -148,8 +46,8 @@ main() {
   install-conf)
     install-conf
     ;;
-  install)
-    install
+  autoinstall)
+    autoinstall
     ;;
   start)
     start
@@ -199,7 +97,13 @@ terminate() {
 }
 
 cleanup() {
-  echo "cleanup..."
+  if [[ "${#TEMP_FILES[@]}" -gt 0 ]]; then
+    echo "Cleaning temp_files...."
+
+    for temp_file in "${TEMP_FILES[@]}"; do
+      rm -f "${temp_file}" || true
+    done
+  fi
 }
 
 main "$@"
