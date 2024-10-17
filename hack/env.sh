@@ -13,5 +13,7 @@ REL_TAG="v${PKG_VERSION}"
 REL_TITLE="Release v${PKG_VERSION}"
 REL_NOTES="
 ## Improvements
-- Fixed the packaged content to ensure all necessary files are correctly included.
+- Optimized the \`mygaops\` operation process for improved efficiency and clarity.
+- Refined the \`install\`, \`run\`, and \`uninstall\` logic to streamline operations.
+- Updated the \`bashutils\` and \`rpmrepo\` submodule versions for enhanced functionality.
 "
