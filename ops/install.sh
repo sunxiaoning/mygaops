@@ -25,6 +25,8 @@ install-repo() {
 }
 
 install-app() {
+  install-repo
+
   install-galera-rpm
   install-mysql-wsrep-rpm
 }

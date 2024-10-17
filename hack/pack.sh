@@ -6,10 +6,14 @@ set -o pipefail
 . hack/env.sh
 
 EXCLUDES=(
+  --exclude='*/.meta'
   --exclude='*/Makefile'
   --exclude='*/.DS_Store'
   --exclude='*/README.md'
   --exclude='*/hack'
+  --exclude='*/rpmbuild'
+  --exclude='*/rpmmirror'
+
   --exclude='*/.gh_token.txt'
   --exclude='*/.git'
   --exclude='*/.git*'
