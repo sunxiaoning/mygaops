@@ -13,7 +13,6 @@ REL_TAG="v${PKG_VERSION}"
 REL_TITLE="Release v${PKG_VERSION}"
 REL_NOTES="
 ## Improvements
-- Optimized the \`mygaops\` operation process for improved efficiency and clarity.
-- Refined the \`install\`, \`run\`, and \`uninstall\` logic to streamline operations.
-- Updated the \`bashutils\` and \`rpmrepo\` submodule versions for enhanced functionality.
+- Optimized the install-repo process by adding the \`RPM_SERVER_PORT\` variable for better configuration.
+- Removed the \`rpmserver\` submodule to streamline the setup and maintenance process.
 "
