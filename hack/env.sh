@@ -6,7 +6,7 @@ USE_DOCKER=${USE_DOCKER:-"0"}
 
 PKG_PATH="hack/pack"
 
-PKG_VERSION="1.1.13"
+PKG_VERSION="1.1.14"
 PKG_NAME="mygaops-${PKG_VERSION}.tar.gz"
 
 REL_TAG="v${PKG_VERSION}"
