@@ -7,18 +7,12 @@ set -o pipefail
 
 trap cleanup EXIT
 
-CLEAN_DONE=0
-cleanup() {
-  if [[ ${CLEAN_DONE} -eq 1 ]]; then
-    return
-  fi
-  CLEAN_DONE=1
-  echo "Received signal EXIT, performing cleanup..."
+export REPO_ORIGIN_SOURCE=${REPO_ORIGIN_SOURCE:-"0"}
 
-  rm -rf "${PKG_PATH}"
+AUTH_GH_SH_URL_GITHUB="https://raw.githubusercontent.com/sunxiaoning/ghcli/main/autorun.sh"
+AUTH_GH_SH_URL_GITEE="https://gitee.com/williamsun/ghcli/raw/main/autorun.sh"
 
-  echo "Cleanup done."
-}
+AUTH_GH_SH_URL=${AUTH_GH_SH_URL:-${AUTH_GH_SH_URL_GITHUB}}
 
 install-rel() {
   if gh release view "${REL_TAG}" &>/dev/null; then
@@ -30,12 +24,29 @@ install-rel() {
 }
 
 auth-gh() {
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/sunxiaoning/ghcli/main/autorun.sh)"
+  if [[ "1" == "${REPO_ORIGIN_SOURCE}" ]]; then
+    AUTH_GH_SH_URL="${AUTH_GH_SH_URL_GITEE}"
+  fi
+
+  /bin/bash -c "$(curl -fsSL ${AUTH_GH_SH_URL})"
 }
 
 main() {
   auth-gh
   install-rel
+}
+
+CLEAN_DONE=0
+cleanup() {
+  if [[ ${CLEAN_DONE} -eq 1 ]]; then
+    return
+  fi
+  CLEAN_DONE=1
+  echo "Received signal EXIT, performing cleanup..."
+
+  rm -rf "${PKG_PATH}"
+
+  echo "Cleanup done."
 }
 
 main "$@"
