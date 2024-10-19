@@ -1,8 +1,11 @@
 RPMREPO_SH_FILE="${CONTEXT_DIR}/rpmrepo/rpmrepo.sh"
 
+export REPO_SERVER_PORT=${REPO_SERVER_PORT:-"80"}
+export REPO_SERVER_NAME=${REPO_SERVER_NAME:-"localhost"}
+export REPO_LOCAL_ROOT_PATH=${REPO_LOCAL_ROOT_PATH:-/opt/rpmrepo}
+
 export REPO_SOURCE=${REPO_SOURCE:-"0"}
 export REPO_SERVER_PROTOCOL=${REPO_SERVER_PROTOCOL:-"http"}
-export REPO_SERVER_NAME=${REPO_SERVER_NAME:-"localhost"}
 
 export MYSQLD_DATADIR
 export MYSQLD_SOCKET=${MYSQLD_SOCKET:-/var/lib/mysql/mysql.sock}
