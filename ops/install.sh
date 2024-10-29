@@ -23,15 +23,16 @@ STOP_SERV_ON_INSTALL=${STOP_SERV_ON_INSTALL:-"0"}
 
 RENDER_SH_FILE="${CONTEXT_DIR}/bashutils/render.sh"
 
-install-repo() {
+install-galera4-repo() {
+  echo "Install galera4 repo..."
+
   "${RPMREPO_SH_FILE}" install-galera4
 }
 
-install-app() {
-  install-repo
+install-mysql-wsrep8-repo() {
+  echo "Install mysql-wsrep8 repo..."
 
-  install-galera-rpm
-  install-mysql-wsrep-rpm
+  "${RPMREPO_SH_FILE}" install-mysql-wsrep8
 }
 
 install-galera-rpm() {
@@ -45,6 +46,9 @@ install-galera-rpm() {
   dnf -y module disable mysql mariadb >/dev/null
 
   echo "Install ${GALERA_NAME}-${GALERA_VERSION} ..."
+
+  install-galera4-repo
+
   "${YUMINSTALLER_SH_FILE}" -o "-y" "${GALERA_NAME}" "${GALERA_VERSION}"
 }
 
@@ -59,7 +63,15 @@ install-mysql-wsrep-rpm() {
   dnf -y module disable mysql mariadb >/dev/null
 
   echo "Install ${MYSQL_WSREP_NAME}-${MYSQL_WSREP_VERSION} ..."
+
+  install-mysql-wsrep8-repo
+
   "${YUMINSTALLER_SH_FILE}" -o "-y" "${MYSQL_WSREP_NAME}" "${MYSQL_WSREP_VERSION}"
+}
+
+install-app() {
+  install-galera-rpm
+  install-mysql-wsrep-rpm
 }
 
 check-mysqld-stopped() {

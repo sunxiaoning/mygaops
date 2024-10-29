@@ -37,8 +37,11 @@ restart() {
 
 main() {
   case "${1-}" in
-  install-repo)
-    install-repo
+  install-galera4-repo)
+    install-galera4-repo
+    ;;
+  install-mysql-wsrep8-repo)
+    install-mysql-wsrep8-repo
     ;;
   install-app)
     install-app
@@ -84,6 +87,12 @@ main() {
     ;;
   uninstall-app)
     uninstall-app
+    ;;
+  uninstall-galera4-repo)
+    uninstall-galera4-repo
+    ;;
+  uninstall-mysql-wsrep8-repo)
+    uninstall-mysql-wsrep8-repo
     ;;
   *)
     echo "The operation: ${1-} is not supported!"

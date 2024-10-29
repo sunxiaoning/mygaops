@@ -45,6 +45,18 @@ uninstall-mysql-wsrep-rpm() {
   fi
 }
 
+uninstall-galera4-repo() {
+  echo "Uninstall galera4 repo..."
+
+  "${RPMREPO_SH_FILE}" uninstall-galera4
+}
+
+uninstall-mysql-wsrep8-repo() {
+  echo "Uninstall mysql-wsrep8 repo..."
+
+  "${RPMREPO_SH_FILE}" uninstall-mysql-wsrep8
+}
+
 check-mysqld-stopped() {
   if [[ "1" == "${STOP_SERV_ON_UNINSTALL}" ]]; then
     stop
