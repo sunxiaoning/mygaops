@@ -94,6 +94,9 @@ main() {
   uninstall-mysql-wsrep8-repo)
     uninstall-mysql-wsrep8-repo
     ;;
+  uninstall-app-repo)
+    uninstall-app-repo
+    ;;
   *)
     echo "The operation: ${1-} is not supported!"
     exit 1
