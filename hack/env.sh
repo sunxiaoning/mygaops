@@ -6,12 +6,12 @@ USE_DOCKER=${USE_DOCKER:-"0"}
 
 PKG_PATH="hack/pack"
 
-PKG_VERSION="1.1.17"
+PKG_VERSION="1.1.18"
 PKG_NAME="mygaops-${PKG_VERSION}.tar.gz"
 
 REL_TAG="v${PKG_VERSION}"
 REL_TITLE="Release v${PKG_VERSION}"
 REL_NOTES="
 ## Improvements
-- Optimized the uninstall-repo process to enhance functionality.
+- Updated the bashutils submodule.
 "
