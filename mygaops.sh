@@ -105,12 +105,12 @@ main() {
 }
 
 terminate() {
-  echo "terminating..."
+  echo "[${SCRIPT_NAME}] Terminating..."
 }
 
 cleanup() {
   if [[ "${#TEMP_FILES[@]}" -gt 0 ]]; then
-    echo "Cleaning temp_files...."
+    echo "[${SCRIPT_NAME}] Cleaning temp_files...."
 
     for temp_file in "${TEMP_FILES[@]}"; do
       rm -f "${temp_file}" || true
